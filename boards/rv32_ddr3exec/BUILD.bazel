@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_nvc//build/nvc:rules.bzl", "wave_view")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "board.arch_rtl.vhdl",
+])
+
+filegroup(
+    name = "rv32_ddr3exec_files",
+    # do not sort
+    srcs = [
+        "//ip/a200t:entity_vhdl",
+        "board.arch_rtl.vhdl",
+    ],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_lib_rv32_ddr3exec",
+    ],
+)
+
+filegroup(
+    name = "tb_srcs",
+    # do not sort
+    srcs = [
+        "tb.vhdl",
+        "tb.arch_sim.vhdl",
+    ],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_lib_rv32_ddr3exec_tb",
+    ],
+)
+
+filegroup(
+    name = "vcd",
+    srcs = ["//boards/rv32_ddr3exec/tool.vivado:sim"],
+    output_group = "vcd",
+)
+
+wave_view(
+    name = "view",
+    args = [
+        "--save=$(location full_wave.gtkw)",
+    ],
+    vhdl_run = ":vcd",
+    deps = [
+        "full_wave.gtkw",
+    ],
+)

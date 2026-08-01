@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@bazel_lib//lib:transitions.bzl", "platform_transition_filegroup")
+load("@rules_cc//cc:defs.bzl", rv32_cc_binary = "cc_binary")
+load("//third_party/riscv32_toolchain:macros.bzl", "bin_file", "disasm_file", "hex_file", "memh_file")
+
+package(default_visibility = ["//visibility:public"])
+
+######################################################################
+# rv32 software bits.
+#
+# See //third_party/riscv32_toolchain/... for details on how to use this.
+
+rv32_cc_binary(
+    name = "uart_software",
+    srcs = ["main.cc"],
+    copts = [
+        "-march=rv32i",
+        "-DUART_ADDRESS=0x40000010",
+        "-mcmodel=medany",
+        "-fPIE",
+    ],
+    linkopts = [
+        "-mcmodel=medany",
+        "-Wl,--emit-relocs",
+    ],
+    deps = [
+        "//lib/uart:lib",
+        "//third_party/riscv32_toolchain:startup",
+    ],
+)
+
+platform_transition_filegroup(
+    name = "rv32i",
+    srcs = [":uart_software"],
+    target_platform = "//third_party/riscv32_toolchain/platform:rv32i",
+    visibility = ["//visibility:public"],
+)
+
+hex_file(
+    name = "hex",
+    srcs = [
+        ":rv32i",
+    ],
+)
+
+bin_file(
+    name = "bin",
+    srcs = [
+        ":rv32i",
+    ],
+)
+
+disasm_file(
+    name = "disasm",
+    srcs = [
+        ":rv32i",
+    ],
+)
+
+memh_file(
+    name = "memh",
+    srcs = [
+        ":bin",
+    ],
+)

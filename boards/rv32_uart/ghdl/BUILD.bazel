@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_ghdl//:rules.bzl", "ghdl_library", "ghdl_verilog")
+
+package(default_visibility = ["//visibility:public"])
+
+ghdl_library(
+    name = "rv32_uart",
+    srcs = [
+        "//boards/rv32_uart:srcs_sim",
+    ],
+    deps = [
+        "//ip/wb/tool.ghdl:wb",
+        "//ip/wb_uart/ghdl:wb_uart",
+        "//testing/unisim/ghdl:unisim",
+        "//third_party/uart/ghdl:lib_uart",
+    ],
+)
+
+ghdl_verilog(
+    name = "rv32_uart_v",
+    lib = ":rv32_uart",
+    unit = "vhdl_top",
+)

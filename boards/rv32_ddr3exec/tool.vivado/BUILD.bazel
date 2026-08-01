@@ -1,0 +1,179 @@
+load(
+    "@rules_vivado//build/vivado:rules.bzl",
+    "vivado_library",
+    "vivado_place_and_route2",
+    "vivado_program_device",
+    "vivado_simulation",
+    "vivado_test",
+    "vivado_synthesis2",
+    "vivado_view",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+_MEMH = "//bin/rv32_ddr3exec/software:memh"
+_HEXFILE = "//bin/pic_test:hex"
+_SIM_DURATION_NS = "200000000" # duration for target ":sim".
+
+_GENERICS = {
+    "RESET_STRATEGY": "MINI",
+    "MEMFILE": "$(location {})".format(_MEMH),
+    "MEMSIZE": "262144",
+    "HEXFILE": "$(location {})".format(_HEXFILE),
+}
+
+vivado_library(
+    name = "rv32_ddr3exec",
+    standard = "2008",
+    # do not sort
+    srcs = [
+        "//boards/rv32_ddr3exec:rv32_ddr3exec_files",
+    ],
+    deps = [
+        "//ip/a200t",
+        "//ip/a200t:constants",
+        "//ip/axi",
+        "//ip/ddr3",
+        "//ip/general/tool.vivado:general",
+        "//ip/wb/tool.vivado:wb",
+        "//ip/wb_uart/vivado:wb_uart",
+        "//third_party/serv:serv_vivado",
+        "//third_party/serv:servile_vivado",
+        "//third_party/uart:third_party_uart",
+        "//third_party/uberddr3",
+        "//third_party/xilinx:unisim",
+    ],
+)
+
+vivado_library(
+    name = "tb",
+    standard = "2008",
+    # do not sort
+    srcs = [
+        "//boards/rv32_ddr3exec:tb_srcs",
+    ],
+    data = [
+        _MEMH,
+        _HEXFILE,
+    ],
+    deps = [
+        ":rv32_ddr3exec",
+        "//ip/a200t",
+        "//ip/a200t:constants",
+        "//ip/axi",
+        "//ip/ddr3",
+        "//ip/general/tool.vivado:general",
+        "//ip/wb/tool.vivado:wb",
+        "//ip/wb_uart/vivado:wb_uart",
+        "//testing/a200t:a200t_clk",
+        "//testing/a200t:a200t_ddr3",
+        "//testing/adt/tool.vivado:adt",
+        "//testing/tool.vivado:testing",
+        "//third_party/serv:serv_vivado",
+        "//third_party/serv:servile_vivado",
+        "//third_party/uart:third_party_uart",
+        "//third_party/uberddr3",
+        "//third_party/vunit/tool.vivado:vunit_lib",
+        "//third_party/xilinx:unisim",
+    ],
+)
+
+# Runs at about 1h real time for 100us simulated.
+vivado_simulation(
+    name = "sim",
+    data = [
+        _MEMH,
+        _HEXFILE,
+    ],
+    extra_modules = ["glbl.glbl"],
+    generic_tops = _GENERICS | {
+        "sim_duration_ns": _SIM_DURATION_NS,
+    },
+    library = ":tb",
+    top = "tb",
+    xelab_relaxed = True,
+)
+
+# A test version of the simulation above.
+vivado_test(
+    name = "test",
+    data = [
+        _MEMH,
+        _HEXFILE,
+    ],
+    extra_modules = ["glbl.glbl"],
+    generic_tops = _GENERICS | {
+        "sim_duration_ns": "200000000",
+    },
+    library = ":tb",
+    timeout = "eternal",
+    top = "tb",
+    xelab_relaxed = True,
+)
+
+vivado_synthesis2(
+    name = "synth",
+    # do not sort
+    srcs = [
+        "//boards/rv32_ddr3exec:rv32_ddr3exec_files",
+        _MEMH,
+    ],
+    data = [
+        _MEMH,
+        _HEXFILE,
+    ],
+    generics = _GENERICS | {
+        "BAUD_RATE": "115200",
+    },
+    part = "xc7a200tfbg484-2",
+    top = "board",
+    xdcs = [
+        "//ip/a200t:xdcs",
+    ],
+    deps = [
+        ":rv32_ddr3exec",
+        "//ip/a200t",
+        "//ip/a200t:constants",
+        "//ip/axi",
+        "//ip/ddr3",
+        "//ip/wb/tool.vivado:wb",
+        "//ip/wb_uart/vivado:wb_uart",
+        "//third_party/serv:serv_vivado",
+        "//third_party/serv:servile_vivado",
+        "//third_party/uart:third_party_uart",
+        "//third_party/uberddr3",
+    ],
+)
+
+vivado_place_and_route2(
+    name = "pnr",
+    synthesis = ":synth",
+    xdcs = [
+        "//ip/a200t:xdcs",
+    ],
+)
+
+vivado_program_device(
+    name = "prog",
+    data = [
+        "//third_party/xilinx/prog_daemon",
+        "//third_party/xilinx/prog_daemon:run",
+    ],
+    prog_daemon = "//third_party/xilinx/prog_daemon:run",
+    prog_daemon_args = [
+        "--daemon-binary=./third_party/xilinx/prog_daemon/prog_daemon_/prog_daemon",
+        "--",  # Following args are args for the prog_daemon.
+        "--daemon-binary=./third_party/xilinx/hw_server/upload.bash",
+        "--",  # Following args are for the upload.bash script.
+        "--upload-shar=./third_party/xilinx/hw_server/hw_server.shar",
+        "--prog-server=your-prog-server.example",
+    ],
+    deps = [
+        ":pnr",
+    ],
+)
+
+vivado_view(
+    name = "view",
+    dep = ":sim",
+)

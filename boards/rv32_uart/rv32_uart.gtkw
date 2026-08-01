@@ -1,0 +1,75 @@
+# SPDX-License-Identifier: Apache-2.0
+[*]
+[*] GTKWave Analyzer v3.3.119 (w)1999-2024 BSI
+[*] Sat Sep 28 04:47:06 2024
+[*]
+[dumpfile] "/home/filmil/.cache/bazel/_bazel_filmil/fba57cb1498e5edac648620d88e186c0/execroot/_main/bazel-out/k8-fastbuild/bin/ip/rv32_uart/wave.vcd"
+[dumpfile_mtime] "Sat Sep 28 04:21:51 2024"
+[dumpfile_size] 2812606154
+[savefile] "/home/filmil/code/a200t_examples/ip/rv32_uart/rv32_uart.gtkw"
+[timestart] 2956
+[size] 2560 1353
+[pos] -641 -59
+*-8.985961 5402 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] TOP.
+[treeopen] TOP.top_level.
+[treeopen] TOP.top_level.my_serving.
+[treeopen] TOP.top_level.my_tb.
+[treeopen] TOP.top_level.my_tb.uart_1.
+[sst_width] 267
+[signals_width] 339
+[sst_expanded] 1
+[sst_vpaned_height] 467
+@28
+TOP.top_level.my_serving.ram.i_clk
+@22
+TOP.top_level.my_tb.uart_1.wb_inputs_adr[31:0]
+@29
+TOP.top_level.my_tb.uart_1.wb_inputs_cyc
+@820
+TOP.top_level.my_tb.uart_1.wb_inputs_dat[31:0]
+@22
+TOP.top_level.my_tb.uart_1.wb_inputs_sel[3:0]
+@28
+TOP.top_level.my_tb.uart_1.wb_inputs_we
+TOP.top_level.my_tb.uart_1.wb_outputs_ack
+@22
+TOP.top_level.my_tb.uart_1.wb_outputs_rdt[31:0]
+@28
+TOP.top_level.rxd
+TOP.top_level.sim[0]
+TOP.top_level.txd
+@200
+--- XXX: Top.top_level.my_serving.ram
+@22
+TOP.top_level.my_serving.ram.aw[31:0]
+TOP.top_level.my_serving.ram.depth[31:0]
+TOP.top_level.my_serving.ram.i_raddr[15:0]
+TOP.top_level.my_serving.ram.i_waddr[15:0]
+TOP.top_level.my_serving.ram.i_wdata[7:0]
+@28
+TOP.top_level.my_serving.ram.i_wen
+@820
+TOP.top_level.my_serving.ram.memfile[455:0]
+@22
+TOP.top_level.my_serving.ram.o_rdata[7:0]
+@28
+TOP.top_level.my_serving.o_wb_stb
+@820
+TOP.top_level.my_tb.uart_1.uart_in[9:0]
+@22
+TOP.top_level.my_tb.uart_1.wr_fx_level[6:0]
+@820
+TOP.top_level.my_tb.uart_1.rd_fx_read_data[7:0]
+@22
+TOP.top_level.my_tb.uart_1.uart_in[9:0]
+TOP.top_level.my_tb.uart_1.rd_fx_level[6:0]
+@820
+TOP.top_level.my_tb.uart_1.rd_fifo_in[9:0]
+@200
+---- XXX: UART
+@28
+TOP.top_level.rxd
+TOP.top_level.txd
+[pattern_trace] 1
+[pattern_trace] 0

@@ -1,0 +1,274 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_ghdl//:rules.bzl", "ghdl_library", "ghdl_verilog")
+load("@rules_nvc//build/nvc:rules.bzl", "extract_file", "produce_waveform", "wave_view")
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
+load("@rules_verilog//verilog:defs.bzl", "verilog_library")
+load(
+    "@rules_vivado//build/vivado:rules.bzl",
+    "vivado_generics",
+    "vivado_library",
+    "vivado_place_and_route",
+    "vivado_place_and_route2",
+    "vivado_program_device",
+
+    # Version2
+    "vivado_synthesis2",
+)
+load("//tools:utils.bzl", "genfile")
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "srcs_sim",
+    srcs = [
+        "0010.rv32_uart.entity.vhdl",
+        "0030.rv32_uart.sim.vhdl",
+    ],
+)
+
+filegroup(
+    name = "srcs",
+    srcs = [
+        "0010.rv32_uart.entity.vhdl",
+        "0020.rv32_uart.synth.vhdl",
+    ],
+)
+
+filegroup(
+    name = "rv32_uart_rtl_vhdl",
+    srcs = [
+        "wb_uart.rtl.vhdl",
+    ],
+)
+
+##
+## Synthesis.
+
+vivado_library(
+    name = "rv32_uart_sim_vivado",
+    standard = "2008",
+    srcs = [
+        ":srcs",
+    ],
+    library_name = "rv32_uart",
+    deps = [
+        "//ip/wb/tool.vivado:wb",
+        "//ip/wb_uart/vivado:wb_uart",
+        "//third_party/serv:serving_vivado",
+        "//third_party/uart:third_party_uart",
+    ],
+)
+
+_MEMH = "//bin/rv32_uart/software:memh"
+
+# I got tired trying to figure out how to do this in tcl and did it this way.
+genfile(
+    name = "rv32_uart_a200t_top_v_gen",
+    data = [
+        _MEMH,
+    ],
+    output = "rv32_uart_a200t_top.v",
+    substitutions = {
+        "{{RESET_STRATEGY}}": "\"NONE\"",
+        "{{MEMFILE}}": "\"memh.mem\"",
+        "{{MEMSIZE}}": "{}".format(32 * 1024),
+        "{{SIM}}": "1'b0",
+    },
+    template = "rv32_uart_a200t_top.tpl.v",
+)
+
+vivado_library(
+    name = "rv32_uart_a200_top_vivado_gen",
+    standard = "2008",
+    srcs = [
+        ":rv32_uart_a200t_top_v_gen",
+    ],
+    library_name = "rv32_uart_a200_top",
+    deps = [
+        ":rv32_uart_sim_vivado",
+        "//third_party/serv:serving_vivado",
+    ],
+)
+
+filegroup(
+    name = "pin_assignment_xdc",
+    srcs = [
+        "pin_assignment.xdc",
+    ],
+)
+
+vivado_synthesis2(
+    name = "synth",
+    srcs = [
+        "debug.tcl",  # Remove this once no longer needed.
+        _MEMH,
+    ],
+    part = "xc7a200tfbg484-2",
+    top = "rv32_uart_a200t_top",
+    xdcs = [":pin_assignment_xdc"],
+    deps = [
+        ":rv32_uart_a200_top_vivado_gen",
+        "//ip/wb_uart/vivado:wb_uart",
+        "//third_party/serv:serving_vivado",
+        "//third_party/uart:third_party_uart",
+    ],
+)
+
+vivado_place_and_route2(
+    name = "pnr",
+    synthesis = ":synth",
+    xdcs = ["//ip/a200t:xdcs"],
+)
+
+vivado_program_device(
+    name = "prog",
+    prog_daemon = "//third_party/xilinx/prog_daemon:run",
+    prog_daemon_args = [
+        "--daemon-binary=./third_party/xilinx/prog_daemon/prog_daemon_/prog_daemon",
+        "--",  # Following args are args for the prog_daemon.
+        "--daemon-binary=./third_party/xilinx/hw_server/upload.bash",
+        "--",  # Following args are for the upload.bash script.
+        "--upload-shar=./third_party/xilinx/hw_server/hw_server.shar",
+        "--prog-server=your-prog-server.example",
+    ],
+    deps = [
+        ":pnr",
+    ],
+)
+
+##
+## Verilog conversion.
+
+ghdl_library(
+    name = "rv32_uart_rtl_ghdl_lib",
+    srcs = [
+        ":rv32_uart_rtl_vhdl",
+    ],
+    library_name = "rv32_uart",
+    deps = [
+        "//boards/rv32_uart/ghdl:rv32_uart",
+        "//ip/wb/tool.ghdl:wb",
+        "//ip/wb_uart/ghdl:wb_uart",
+        "//testing/unisim/ghdl:unisim",
+        "//third_party/uart/ghdl:third_party_uart_with_vendor",
+    ],
+)
+
+# Simulator.
+ghdl_verilog(
+    name = "rv32_uart_rtl_ghdl_lib_v",
+    lib = ":rv32_uart_rtl_ghdl_lib",
+    unit = "wb_uart_top",
+    vendor = [
+        "unisim",  # Treat unisim as a black box... hopefully.
+    ],
+)
+
+# Synthesis.
+ghdl_verilog(
+    name = "rv32_uart_sim_ghdl_lib_v",
+    lib = ":rv32_uart_rtl_ghdl_lib",
+    unit = "wb_uart_top",
+    vendor = [
+        "unisim",
+    ],
+)
+
+######################################################################
+# Convert the testbench version of the setup to Verilog, so that it can
+# be added to a Verilator library.
+
+filegroup(
+    name = "tb_srcs",
+    srcs = [
+        "tb.vhdl",
+    ],
+)
+
+ghdl_library(
+    name = "tb",
+    srcs = [
+        ":tb_srcs",
+    ],
+    deps = [
+        "//boards/rv32_uart/ghdl:rv32_uart",
+        "//ip/wb/tool.ghdl:wb",
+        "//ip/wb_uart/ghdl:wb_uart",
+        "//testing:testing_ghdl",
+        "//testing/unisim/ghdl:unisim",
+        "//third_party/uart/ghdl:lib_uart",
+    ],
+)
+
+ghdl_verilog(
+    name = "tb_v",
+    lib = ":tb",
+    unit = "tb",
+)
+
+######################################################################
+# Verilator simulation
+
+verilog_library(
+    name = "tb_v_lib",
+    srcs = [
+        "tb.v",
+        ":tb_v",
+    ],
+    data = [
+        "//third_party/riscv32_toolchain:memh",
+    ],
+    deps = [
+        "//third_party/serv:servile",
+        "//third_party/serv:serving",
+    ],
+)
+
+verilator_cc_library(
+    name = "bin_verilator",
+    module = ":tb_v_lib",
+    module_top = "top_level",
+    trace = True,
+    vopts = [
+        '-GRESET_STRATEGY=\\\"MINI\\\"',
+        '-Gmemfile=\\\"bazel-out/k8-fastbuild/bin/bin/rv32_uart/software/memh.mem\\\"',
+        "-Gmemsize={}".format(1024 * 130),
+        "-Gsim=1",
+    ],
+)
+
+cc_binary(
+    name = "sim",
+    srcs = [
+        "main.cc",
+    ],
+    deps = [
+        ":bin_verilator",
+    ],
+)
+
+######################################################################
+# Simulation waveform generator, and viewer rule.
+
+# bazel build //boards/rv32_uart:wave
+# to run the simulation.
+produce_waveform(
+    name = "wave",
+    args = [
+        "20000000",  # This many time units to simulate.
+    ],
+    data = [
+        # The firmware to be loaded into the rv32 core.
+        "//bin/rv32_uart/software:memh",
+    ],
+    simulation = ":sim",
+)
+
+# bazel run //boards/rv32_uart:view
+wave_view(
+    name = "view",
+    # The file with the default wave setup.
+    save_file = "rv32_uart.gtkw",
+    vhdl_run = ":wave",
+)
