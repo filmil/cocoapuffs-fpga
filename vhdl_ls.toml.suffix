@@ -1,0 +1,4 @@
+a200t_ddr3.files = [
+    #'testing/a200t/a200t_ddr3.sv',
+]
+unisim.is_third_party = true

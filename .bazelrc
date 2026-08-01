@@ -1,0 +1,28 @@
+common:nix --host_platform=@rules_nixpkgs_core//platforms:host
+common:nix --incompatible_enable_cc_toolchain_resolution
+
+# Verilator requires at least C++14
+build --action_env=BAZEL_CXXOPTS="-std=c++20"
+build --experimental_ui_max_stdouterr_bytes=-1
+build --copt="-Wno-error"
+build --@rules_vunit//:vhdl_standard=2008
+# grlib's NVC libraries default to VHDL-1993; the rest of the repo's NVC sims
+# compile with --std=2008, which makes nvc reject the mix ("design unit depends
+# on 1993 version of STD.STANDARD but conflicting 2008 version has been loaded").
+# Pin grlib to 2008 so its STD.STANDARD matches.
+build --@grlib//:vhdl_standard=2008
+build --@rules_vivado//internal:vivado_version=2025.2
+
+# This is silly.
+build --action_env=PKG_CONFIG_PATH=/nix/store/2cdblwdscbgpmjgghgqs5wcwg2cm4mjc-bzip2-1.0.8-dev/lib/pkgconfig
+#build --action_env=elfutils_bazel_CFLAGS="-I/nix/store/9zghvnkj49dnz9bdfa81b3h4kyarvzrp-xz-5.4.6-dev/include"
+#build --action_env=elfutils_bazel_LDFLAGS="-L/nix/store/9zghvnkj49dnz9bdfa81b3h4kyarvzrp-xz-5.4.6-dev/lib"
+
+# Add project-wide settings below.
+common --registry=https://raw.githubusercontent.com/filmil/bazel-registry/main
+common --registry=https://bcr.bazel.build
+
+startup --digest_function=BLAKE3
+
+
+try-import %workspace%/user.bazelrc

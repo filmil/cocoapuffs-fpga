@@ -1,0 +1,135 @@
+# SPDX-License-Identifier: Apache-2.0
+
+load("@bazel_gazelle//:def.bzl", "gazelle")
+load("@bazel_nvc_vivado//internal:macros.bzl", "extract_files")
+load("@buildifier_prebuilt//:rules.bzl", "buildifier")
+load("@doxygen//:doxygen.bzl", "doxygen")
+
+# bazel run //:gazelle
+# gazelle:prefix github.com/filmil/a200t_examples
+gazelle(name = "gazelle")
+
+# bazel run //:buildifier
+buildifier(
+    name = "buildifier",
+)
+
+# bazel run //:gazelle-update-repos
+gazelle(
+    name = "gazelle-update-repos",
+    args = [
+        "-from_file=go.mod",
+        "-to_macro=deps.bzl%go_dependencies",
+        "-prune",
+    ],
+    command = "update-repos",
+)
+
+doxygen(
+    name = "docs",
+    # do not sort
+    srcs = [
+        # Targets
+        "GEMINI.md",
+        "//ip/a200t:srcs",
+        "//ip/tl:tl_srcs",
+        "//boards/rv32_uart:tb_srcs",
+        "//ip/axi:axi_srcs",
+        "//boards/rv32_uart:rv32_uart_sim_ghdl_lib_v",
+        "//boards/rv32_uart:rv32_uart_rtl_vhdl",
+        "//ip/wb",
+        "//testing:srcs",
+        "//ip/wb_uart",
+        "//third_party/uart16550:srcs",
+        "//third_party/uart16550:hdrs",
+        "//boards/rv32_ddr3:tb_srcs",
+        "//lib/memtest:hdrs",
+        "//lib/uart:hdrs",
+        "//lib:hdrs",
+        "//lib:srcs",
+        "//ip/a200t:entity_vhdl",
+        "//ip/a200t:constants_srcs",
+        "//ip/a200t:srcs1",
+        "//ip/a200t:srcs11",
+        "//ip/a200t:srcs2",
+        "//ip/a200t:srcs3",
+        "//ip/ddr3:srcs",
+        "@vunit//:string_ops_srcs",
+        "@vunit//:path_srcs",
+        "//ip/general:srcs",
+        "//third_party/sdcard:srcs",
+        "README.md",
+        "//doc",
+    ],
+    configurations = [
+        # This crashes Doxygen 1.14.0 (May 2025)
+        #"OPTIMIZE_OUTPUT_VHDL = YES",
+
+        # Generate docs even for undocumented items.
+        "EXTRACT_ALL = YES",
+
+        # Options below were recommended by doxygen.
+        "INHERIT_DOCS = NO",
+        "HIDE_SCOPE_NAMES = YES",
+        "ENABLE_PREPROCESSING = NO",
+        "EXTRACT_PACKAGE = YES",
+        "EXTRACT_PRIVATE = YES",
+        "IMAGE_PATH = doc",
+        "FILE_PATTERNS += *.png",
+    ],
+    generate_html = True,
+    generate_latex = False,
+    project_brief = "Example hardware for the Alinx A200T board",
+    project_name = "a200t_examples",
+    use_mdfile_as_mainpage = "README.md",
+)
+
+alias(
+    name = "unisim_src",
+    actual = "@bazel_nvc_vivado//src:unisim",
+)
+
+extract_files(
+    name = "unisim_excavate",
+    directory = ":unisim_src",
+    files = [
+        "unisim_VCOMP.vhd",
+        "unisim_VPKG.vhd",
+    ],
+)
+
+filegroup(
+    name = "unisim",
+    srcs = [":unisim_excavate"],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_lib_unisim",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "grlib",
+    actual = "@grlib//:grlib",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "gaisler",
+    actual = "@grlib//:gaisler",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "techmap",
+    actual = "@grlib//:techmap",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "NOELV_RV64",
+    actual = "@grlib//:NOELV_RV64",
+    visibility = ["//visibility:public"],
+)
+
+

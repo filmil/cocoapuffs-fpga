@@ -1,0 +1,15 @@
+{
+    "$schema": "https://raw.githubusercontent.com/theoremlp/rules_multitool/main/lockfile.schema.json",
+    "serial_upload": {
+        "binaries": [
+            {
+                "kind": "archive",
+                "url": "https://github.com/filmil/futility/releases/download/v0.7.0/serial_upload-linux-amd64.zip",
+                "sha256": "ead139b95baa4239f7851a027460ee6406d0f5d411d742fd54e1b22d25ecb3e4",
+                "os": "linux",
+                "file": "serial_upload/serial_upload",
+                "cpu": "x86_64"
+            }
+        ]
+    }
+}

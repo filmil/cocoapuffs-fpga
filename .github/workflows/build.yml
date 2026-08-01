@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: Apache-2.0
+name: Build
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: "13 7 * * 0"
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  test:
+    # PRs already build via the pull_request trigger, so skip the redundant
+    # rebuild when a push to main is a PR merge (squash "(#N)" or "Merge pull
+    # request #N"). Direct pushes to main, PR builds, and the weekly cron all
+    # still run.
+    if: >-
+      github.event_name != 'push'
+      || ( !startsWith(github.event.head_commit.message, 'Merge pull request')
+           && !contains(github.event.head_commit.message, '(#') )
+    runs-on: ubuntu-latest
+    steps:
+      - name: Maximize build space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: '8192'
+          swap-size-mb: 1024
+          remove-dotnet: 'true'
+          remove-haskell: 'true'
+          remove-android: 'true'
+          remove-codeql: 'true'
+          remove-docker-images: 'true'
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Symlink toolchain caches
+        run: |
+          rm -rf ~/.cache ~/.bazel
+          mkdir -p ${{ github.workspace }}/.cache ${{ github.workspace }}/.bazel
+          ln -s ${{ github.workspace }}/.cache ~/.cache
+          ln -s ${{ github.workspace }}/.bazel ~/.bazel
+      - name: Setup bazel
+        uses: bazel-contrib/setup-bazel@0.8.5
+        with:
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}
+          repository-cache: true
+          cache-version: '2'
+      - name: Build
+        run: |
+          mkdir -p ${{ github.workspace }}/.tmp ${{ github.workspace }}/.sandbox
+          export TMPDIR=${{ github.workspace }}/.tmp
+          # The "Maximize build space" step removes the Android SDK
+          # (remove-android: true), but the runner still exports ANDROID_HOME /
+          # ANDROID_SDK_ROOT pointing at the now-empty dir. Transitive
+          # rules_android then hard-fails during @androidsdk fetch ("No Android
+          # SDK apis found ..."). Unset them so rules_android creates an empty
+          # stub repo; this build uses no Android targets, so it must not depend
+          # on the SDK.
+          unset ANDROID_HOME ANDROID_SDK_ROOT
+          bazel --max_idle_secs=200 build \
+            --sandbox_base=${{ github.workspace }}/.sandbox \
+            //bin/rv32_uart/software/... \
+            //ip/wb/tool.ghdl/...

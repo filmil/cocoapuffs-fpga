@@ -1,0 +1,15 @@
+bazel-*
+user.bazelrc
+.nvim
+.hdl_checker
+local/*
+.gemini
+
+# Serial-capture debug logs from on-hardware OpenSBI / standalone-test runs
+/log*.txt
+# Large captured simulation traces (multi-MB, reproducible; kept locally only)
+boards/noelv/sim_traces/*.gz
+
+# Large prebuilt Zircon ZBI snapshot from the Fuchsia tree (refresh from
+# $HOME/b3/fuchsia/out/bringup.riscv64-balanced/kernel.eng.zbi; ~1.8 MB).
+third_party/fuchsia/kernel.eng.zbi
