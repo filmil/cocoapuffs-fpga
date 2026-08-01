@@ -1,0 +1,41 @@
+Zircon kernel early-init panic on the Cocoapuffs/NOEL-V FPGA — 2026-07-09
+Recovered by a hand-rolled frame-pointer backtrace over the GRLIB ahbjtag
+debug module (bin/noelv_ahbjtag_read/bt_procs.cfg: Sv39 translate + fp walk).
+
+Kernel: git-5341d6cd (cocoapuffs-apbuart branch), debug build (lk_debug_level 2).
+
+Fault CSRs at halt: scause=0xd (Load Page Fault) sepc=memcpy(memcpy.c:37)
+stval=0xFFFFFFFFFFFFFFF8 (source pointer = -8).
+
+Decoded backtrace (innermost first), the panic RECURSION:
+  platform_pgetc                         (panic shell, polling)
+  read_line_panic                        console.cc:769
+  platform_specific_halt                 generic-riscv64/platform.cc:464  <-- bt.Print()
+  Backtrace::Print                       backtrace.cc:16  file->Write(kBootConstants.kernel_debug_ident.get())
+  PhysHandoffString::get/data            handoff-ptr.h:292/304
+  PhysHandoffPtr<char const,kPermanent>::get   handoff-ptr.h:157   <-- returns a BAD pointer
+  ...(memcpy of that pointer -> Load Page Fault -> Riscv64ExceptionEntry ->
+      Riscv64KernelException -> panic -> Backtrace::Print -> ... INFINITE)
+  ... deepest (original) frame:
+  PmmNode::InitArena -> PmmArena::Init   pmm_node.cc / arena setup   <-- the FIRST panic
+
+TWO BUGS:
+  A. platform_specific_halt's Backtrace::Print dereferences
+     kBootConstants.kernel_debug_ident (a kPermanent PhysHandoffString) whose
+     pointer is unmapped in the kernel address space -> the backtrace printer
+     itself page-faults -> every panic recurses forever -> TOTAL console
+     silence (this is why nothing ever printed).  NOTE kernel_version_ident
+     .get() WORKED earlier (version string is in the dlog), so only some
+     permanent-handoff string pointers are bad.
+  B. An original panic in early PMM arena setup (PmmNode::InitArena ->
+     PmmArena::Init), reason masked by the recursion.
+
+Both smell like the experimental early-boot/memory changes on the
+cocoapuffs-apbuart branch (fuchsia commit 5341d6cd: arch-allocation.h,
+zbi-memory.cc, kArchAllocationMinAddr=1MiB) leaving phys-handoff pointers
+unmapped.  Fix A first (so the real panic B prints), or catch B with a
+hardware load-watchpoint at the fault address.
+
+NOTE: "console silent" was a SYMPTOM — the kernel crashes in early init,
+before the UART is ever set up.  The loader chain + kernel entry + PMM init
+all work on HW (the cache-enable fix, PR #164).

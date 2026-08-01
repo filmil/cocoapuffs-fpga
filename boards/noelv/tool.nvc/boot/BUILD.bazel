@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Boots OpenSBI under NVC by loading the firmware via the rules_nvc generics map
+# + data (rules_nvc #101).  Mirrors the xsim target
+# //boards/noelv/tool.vivado:opensbi_trace.  Separate package from
+# //boards/noelv/tool.nvc so the macro-generated `tb_noelvsys_nvc` elaborate
+# target does not collide with the empty-firmware probe there.
+#
+# The ahb_bram opens each memfile at SIMULATION START (nvc -r init phase runs
+# the `signal mem := load_mem(memfile)` file_open), NOT at elaboration -- so the
+# generic must expand to the runfiles short-path ($(rootpath)) that resolves
+# against the test working directory, and the data must be in the test runfiles
+# (rules_nvc _vhdl_internal_test now stages `data`).
+load("@rules_nvc//build/nvc:rules.bzl", "vhdl_test")
+
+package(default_visibility = ["//visibility:public"])
+
+vhdl_test(
+    name = "opensbi_nvc_boot",
+    srcs = ["//boards/noelv:tb_noelvsys_nvc_srcs"],
+    entity = "tb_noelvsys_nvc",
+    deps = [
+        "//:gaisler",
+        "//:grlib",
+        "//:techmap",
+        "//ip/bridges/tool.nvc:bridges",
+    ],
+    standard = "2008",
+    data = [
+        "//bin/noelv_sim_boot:memh",
+        "//boards/noelv:opensbi_fw_hello_lowram_mem",
+    ],
+    generics = {
+        "sim_duration_ns": "6000",
+        "noelv_memfile": "$(rootpath //bin/noelv_sim_boot:memh)",
+        "noelv_memsize": "4096",
+        "lowmem_file": "$(rootpath //boards/noelv:opensbi_fw_hello_lowram_mem)",
+        # 16 MiB (regbits 22, 0x0-0xFFFFFF): covers OpenSBI text (0x40000) + heap
+        # (0x80000).  NVC folds this mem_t init array at elaboration, which OOMs
+        # the default heap -- raised via heap_size/unit_heap_size below.
+        "lowmem_size": "4194304",
+        "lowmem_regbits": "22",
+        "disas": "1",
+    },
+    # Raise NVC's global heaps so the 16 MiB behavioral memory can be folded at
+    # elaboration (needs rules_nvc feat-elaborate-heap: the -H/-M passthrough).
+    heap_size = "4g",
+    unit_heap_size = "4g",
+    # The run (nvc -r) also allocates the memory at init, so it needs the heap
+    # too; the wrapper hoists -H*/-M* from args to globals before -r.
+    args = ["-H4g", "-M4g", "--ieee-warnings=off"],
+    tags = ["manual"],
+)

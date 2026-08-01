@@ -1,0 +1,191 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+/dts-v1/;
+
+/ {
+    model = "HDLFactory Cocoapuffs: FPGA Soft Core RISC-V Board";
+    compatible = "hdlf,cocoapuffs";
+    #address-cells = <2>;
+    #size-cells = <2>;
+
+    aliases {
+        serial0 = &uart0;
+    };
+
+    // Explicit console selection.  The Zircon boot-shim's /chosen matcher only
+    // picks a UART via stdout-path (or a `console=` bootarg); with neither it
+    // selects NO console and emits no APBUART ZBI item for physboot/the kernel.
+    // OpenSBI's fdt_serial_init honors this too.  The ZBI DTB genrules add the
+    // linux,initrd-* properties into this node (and must not re-create it).
+    chosen {
+        stdout-path = "/soc/serial@ff900000";
+        // Userspace ASLR is ENABLED (aslr.disable=false).  An earlier build
+        // faulted here: with ASLR on, userboot took an instruction-access fault
+        // (scause=1) at its randomized high base BEFORE running.  That no longer
+        // reproduces on current HEAD -- HW-verified 2026-07-13 across two distinct
+        // random placements (userboot base 0x2a706b1000 and 0x16b9afc000; entry =
+        // base+0x97aa in both), each self-relocating and running to the EXPECTED
+        // terminus below.  The old fault was collateral of a since-fixed problem
+        // (the NMIE/mie-quiesce interrupt-firmware fixes, sstc, and the 1 GB DDR3
+        // map all landed in between); a full bisect wasn't worth it once ASLR-on
+        // booted cleanly.  No debug_uart_poll: the interrupt-driven console works
+        // (see [[noelv_smrnmi_nmie]]), so the whole boot streams over IRQ TX.
+        //
+        // EXPECTED terminus: the eng.zbi carries no bootfs, so userboot's zbi.cc
+        // "no '/boot' bootfs in bootstrap message" fail() -> __builtin_trap
+        // (util.cc:176, unimp -> scause=2 illegal-instr at epc=base+0xffc8) -- the
+        // same end-state as the QEMU reference for a bootfs-less image.  This is
+        // the "one full proven boot" (OpenSBI -> shim -> physboot -> kernel full
+        // init -> userspace -> userboot).  A real-userspace image needs a ZBI that
+        // actually contains a bootfs.
+        bootargs = "aslr.disable=false";
+    };
+
+    // 40 MHz core clock and reference clocks (lowered from 50 so the RV64 GP core
+    // meets timing; the APBUART console baud + GPTIMER derive from core_clk).
+    clocks {
+        core_clk: core_clk {
+            #clock-cells = <0>;
+            compatible = "fixed-clock";
+            clock-frequency = <40000000>; // 40 MHz
+        };
+    };
+
+    cpus {
+        #address-cells = <1>;
+        #size-cells = <0>;
+        // mtime tick rate of the NOEL-V CLINT @0xE0000000 (system clock, 40 MHz).
+        // OpenSBI's fdt_parse_timebase_frequency() reads this from /cpus; without
+        // it the riscv,clint0 timer init returns SBI_ENOENT (-1006).
+        timebase-frequency = <40000000>;  // 40 MHz
+
+        cpu0: cpu@0 {
+            device_type = "cpu";
+            compatible = "gaisler,noelv", "riscv";
+            reg = <0>;
+            status = "okay";
+            riscv,isa = "rv64imac_sstc";
+            mmu-type = "none";             // Cacheable disabled in generics config
+            clock-frequency = <40000000>;  // 40 MHz
+
+            cpu0_intc: interrupt-controller {
+                #address-cells = <0>;
+                #interrupt-cells = <1>;
+                compatible = "riscv,cpu-intc";
+                interrupt-controller;
+            };
+        };
+    };
+
+    // Shared DDR3 Main RAM: the full 1 GB.  The chip and the UberDDR3 controller
+    // (row=15,col=10,ba=3, 32-byte bursts => 2^25 x 32 B = 1 GB) are both 1 GB,
+    // and the AHB decode maps a 1 GB window.  It used to be declared as only
+    // 128 MB: the wide-WB adapter dropped byte-address bits 29:27, so the 1 GB
+    // window ALIASED every 0x08000000 (0x40000 == 0x08040000 == ...), and
+    // declaring 1 GB let the ZBI wrap onto physical 0x0 and destroy the firmware.
+    // That adapter bug is fixed (ip/a200t/wide_wb_ddr3.vhdl: adr(29 downto 5)),
+    // synthesized into the bitstream, and VERIFIED on hardware by
+    // //bin/noelv_memtest1g: all 8 128 MB banks are distinct (no 29:27 aliasing)
+    // and a 128-point march over the full 1 GB reads/writes correctly ("ALL OK").
+    memory@0 {
+        device_type = "memory";
+        reg = <0x0 0x00000000 0x0 0x40000000>; // [0x00000000 - 0x3FFFFFFF] = 1 GB
+    };
+
+    // NOTE: there is NO /memory node for the boot BRAM at 0xC0000000.  The AHB
+    // decodes a 1 MB window there (board.arch_rtl noelv_boot_ram, haddr 0xC00
+    // hmask 0xFFF), but the actual BRAM is only 4 KB (noelv_boot_bram
+    // reg_bit_count=12) and holds the boot stub -- it is not general RAM.
+    // Declaring it as 1 MB of memory made Zircon's PMM set up page bookkeeping
+    // near the top of the window (0xC00FD000), far past the 4 KB physical BRAM;
+    // the AHB errored the write -> store access fault (scause=7) during
+    // PmmNode::InitArena -> early panic.  The kernel only needs the DDR3 at
+    // memory@0.
+
+    // EMPTY /reserved-memory placed AFTER /memory on purpose: OpenSBI's
+    // fdt_reserved_memory_fixup REUSES an existing /reserved-memory node in place
+    // (it only fdt_add_subnode's a new one at index 0 = BEFORE /memory when none
+    // exists). By declaring it here, OpenSBI's mmode_resv children (its firmware
+    // 0x40000-0xa0000) land AFTER /memory in the FDT, so the phys memory matcher
+    // sees /memory's kFreeRam first and the kReserved holes second -- otherwise the
+    // later /memory range overrides the earlier reservation and physboot allocates
+    // the kernel over OpenSBI (observed). Empty (no child) so there is NO no-map
+    // over OpenSBI's own running text, which previously hung OpenSBI silently.
+    reserved-memory {
+        #address-cells = <2>;
+        #size-cells = <2>;
+        ranges;
+    };
+
+    // SoC Bus mapping for internal APB and memory-mapped subsystems
+    soc {
+        #address-cells = <2>;
+        #size-cells = <2>;
+        compatible = "simple-bus";
+        ranges;
+
+        // NOEL-V ACLINT (core-local interruptor) at 0xE0000000. It uses the
+        // classic CLINT register layout (msip @ 0x0, mtimecmp @ 0x4000, mtime @
+        // 0xBFF8), so OpenSBI's riscv,clint0 driver provides the SBI timer
+        // (mtime/mtimecmp) and IPI (msip). interrupts-extended lists, per hart,
+        // the M-mode software (3) and M-mode timer (7) interrupts.
+        clint0: clint@e0000000 {
+            compatible = "riscv,clint0";
+            reg = <0x0 0xe0000000 0x0 0x00010000>;
+            interrupts-extended = <&cpu0_intc 3>, <&cpu0_intc 7>;
+        };
+
+        // NOEL-V GRLIB PLIC at 0xF8000000 (noelvsys PLIC_HADDR=0xF80,
+        // PLIC_HMASK=0xFC0 => a 64 MB window; nsources = NAHBIRQ = 32).
+        // Zircon's RISC-V kernel requires a PLIC node (dev/interrupt/plic):
+        // without it interrupt_get_max_vector() returns 0 and the kernel
+        // asserts (platform.cc "max_vector > 0") in early boot.  It matches
+        // "sifive,plic-1.0.0"/"riscv,plic0" and reads reg + riscv,ndev; the
+        // hart contexts are M-external (cpu0_intc 11) then S-external
+        // (cpu0_intc 9) -- the kernel uses context index 1 (hart-0 S-ext,
+        // PLIC_HART_IDX(0)=1).
+        plic0: interrupt-controller@f8000000 {
+            compatible = "sifive,plic-1.0.0", "riscv,plic0";
+            reg = <0x0 0xf8000000 0x0 0x04000000>;
+            #address-cells = <0>;
+            #interrupt-cells = <1>;
+            interrupt-controller;
+            riscv,ndev = <31>;
+            interrupts-extended = <&cpu0_intc 11>, <&cpu0_intc 9>;
+        };
+
+        // Built-in Gaisler APB UART mapped at 0xFF900000
+        uart0: serial@ff900000 {
+            compatible = "gaisler,apbuart";
+            reg = <0x0 0xff900000 0x0 0x1000>;
+            // Route the APBUART IRQ through the PLIC (source 1), NOT the hart-local
+            // cpu0_intc.  On RISC-V a peripheral IRQ must arrive as an EXTERNAL
+            // interrupt via the PLIC; the console's runtime path is the kernel
+            // debuglog drainer, which does a BLOCKING interrupt-driven UART write
+            // (platform_dputs_thread -> Write(Blocking::kYes) -> waits on the TX
+            // interrupt).  With the old <&cpu0_intc 1> the TX IRQ was never
+            // delivered, so the drainer blocked once the FIFO filled and late-
+            // kernel/userspace output (starting user space, userboot) never
+            // reached the wire -- only early polled output did.  The GRLIB
+            // noelvsys wires the console APBUART to grplic_ahb at pirq=1 (edge-
+            // triggered); our apbuart ISR masks/unmasks TX to make fresh edges.
+            interrupts-extended = <&plic0 1>; // APBUART -> PLIC source 1
+            clocks = <&core_clk>;
+            // Explicit clock rate for consumers that don't chase the `clocks`
+            // phandle: the linux-riscv64-boot-shim's DT parser reads this node
+            // directly and defaults to 50 MHz without it, yielding 92160 baud
+            // (115200 * 40/50) on the console.  OpenSBI resolves the phandle and
+            // is unaffected.  Matches core_clk = 40 MHz.
+            clock-frequency = <40000000>;
+            status = "okay";
+        };
+
+        // Built-in Gaisler GPTIMER
+        timer0: timer@80000300 {
+            compatible = "gaisler,gptimer";
+            reg = <0x0 0x80000300 0x0 0x100>;
+            interrupts-extended = <&cpu0_intc 2>; // GPTIMER IRQ Line 2
+            clocks = <&core_clk>;
+            status = "okay";
+        };
+    };
+};

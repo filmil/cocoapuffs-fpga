@@ -1,0 +1,26 @@
+Zircon kernel boot on the Cocoapuffs/NOEL-V FPGA — 2026-07-08
+Recovered from the kernel debuglog ring in DDR3 via ahbjtag (after a
+DM-triggered D-cache flush; the console itself is silent, see task #17).
+
+Version: git-5341d6cd812a14133996688148c0059a0170928c-dirty  (kernel.eng.zbi)
+
+Serial capture (loaders, verbatim, @115200):
+  RV64 boot.  ... OpenSBI v1.6 banner ...
+  linux-riscv64-boot-shim: <full physical-memory table, data ZBI @0x06000000>
+  early-init: hart 00 ISA string: rv64imac
+  physload: STORAGE_KERNEL decompressed 1539.4K -> 3716K
+  physboot: <ELF relocate, VM handoff tables>
+  physboot: Handing off at physical load address 0x4f6000, entry 0xffffffff0006fa28...
+
+Kernel debuglog (recovered from RAM — never reached the wire):
+  zx_system_get_version_string: git-5341d6cd812a14133996688148c0059a0170928c-dirty
+  kernel_debug_level: 2
+  INIT: cpu 0, calling hook 0xffffffff001da1e6 (idle_power_thread_earliest) at level 0x1, flags 0x1
+  PMM: adding arena [0, 0x8000000)              <- the 128 MB DDR3 map
+  PMM: reserved [0x5ec4000, 0x6044000): bookkeeping
+  PMM: adding arena [0xc0000000, 0xc0100000)    <- the boot BRAM region
+  PMM: reserved [0xc00fd000, 0xc0100000): bookkeeping
+
+DM state: core halted repeatedly at read_line_panic / platform_pgetc
+(console.cc panic shell) — the expected terminal state for a bootfs-less
+eng image; caches enabled (CCTRL 0x10F).

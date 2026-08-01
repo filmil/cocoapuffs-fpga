@@ -1,0 +1,959 @@
+load(
+    "@rules_vivado//build/vivado:rules.bzl",
+    "vivado_library",
+    "vivado_place_and_route2",
+    "vivado_program_device",
+    "vivado_repl",
+    "vivado_simulation",
+    "vivado_test",
+    "vivado_synthesis2",
+    "vivado_view",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+# SERV core program. Default (used by the self-checking :sim / :test) is the
+# banner-only noelv_serv_boot, which auto-hands off to NOEL-V so the sim sees
+# the NOEL-V "halt." banner without an upload. The :synth (hardware) target
+# overrides MEMFILE/HEXFILE to the Intel HEX uploader (//bin/noelv_serv_upload),
+# which receives the real payload over UART before enabling NOEL-V.
+_MEMH = "//bin/noelv_serv_boot:memh"
+_HEXFILE = "//bin/noelv_serv_boot:hex"
+_SERV_UPLOAD_MEMH = "//bin/noelv_serv_upload:memh"
+_SERV_UPLOAD_HEX = "//bin/noelv_serv_upload:hex"
+_NOELV_BOOT_MEMH = "//bin/noelv_boot:memh"
+_SIM_DURATION_NS = "300000" # 300us for target ":sim".
+
+_GENERICS = {
+    "RESET_STRATEGY": "MINI",
+    "MEMFILE": "$(location {})".format(_MEMH),
+    "MEMSIZE": "65536",
+    "HEXFILE": "$(location {})".format(_HEXFILE),
+    "NOELV_MEMFILE": "$(location {})".format(_NOELV_BOOT_MEMH),
+    "NOELV_MEMSIZE": "4096",
+}
+
+vivado_library(
+    name = "bridges_sim",
+    standard = "2008",
+    srcs = ["//ip/bridges"],
+    deps = [
+        "//:gaisler",
+        "//:grlib",
+        "//ip/wb/tool.vivado:wb",
+        "//third_party/xilinx:unisim",
+    ],
+)
+
+vivado_library(
+    name = "noelv",
+    vhdl1993 = True,
+    # do not sort
+    srcs = [
+        "//boards/noelv:noelv_files",
+    ],
+    deps = [
+        "//ip/a200t",
+        "//ip/a200t:constants",
+        "//ip/axi",
+        "//ip/bridges/tool.vivado:bridges",
+        "//ip/bridges/tool.vivado:gaisler",
+        "//ip/bridges/tool.vivado:grlib",
+        "//ip/bridges/tool.vivado:techmap",
+        "//ip/ddr3",
+        "//ip/debug/tool.vivado:debug",
+        "//ip/general/tool.vivado:general",
+        "//ip/wb/tool.vivado:wb",
+        "//ip/wb_uart/vivado:wb_uart",
+        "//third_party/serv:serv_vivado",
+        "//third_party/serv:servile_vivado",
+        "//third_party/uart:third_party_uart",
+        "//third_party/uberddr3",
+        "//third_party/xilinx:unisim",
+    ],
+)
+
+vivado_library(
+    name = "noelv_sim",
+    library_name = "noelv",
+    standard = "2008",
+    # do not sort
+    srcs = [
+        "//boards/noelv:noelv_files",
+    ],
+    deps = [
+        "//ip/a200t",
+        "//ip/a200t:constants",
+        "//ip/axi",
+        "//ip/bridges/tool.vivado:bridges_sim",
+        "//ip/bridges/tool.vivado:gaisler_sim_custom",
+        "//ip/bridges/tool.vivado:grlib_sim",
+        "//ip/bridges/tool.vivado:techmap_sim",
+        "//ip/ddr3",
+        "//ip/debug/tool.vivado:debug",
+        "//ip/general/tool.vivado:general",
+        "//ip/wb/tool.vivado:wb",
+        "//ip/wb_uart/vivado:wb_uart",
+        "//third_party/serv:serv_vivado",
+        "//third_party/serv:servile_vivado",
+        "//third_party/uart:third_party_uart",
+        "//third_party/uberddr3",
+        "//third_party/xilinx:unisim",
+    ],
+)
+
+vivado_library(
+    name = "tb",
+    standard = "2008",
+    # do not sort
+    srcs = [
+        "//boards/noelv:tb_srcs",
+    ],
+    data = [
+        _MEMH,
+        _HEXFILE,
+        _NOELV_BOOT_MEMH,
+    ],
+    deps = [
+        ":noelv_sim",
+        # board.arch_rtl instantiates the AHB recorder (debug.ahb_recorder /
+        # debug.uart_tx), so the sim tb library must see the debug lib to restore
+        # noelv.board -- the synth noelv/noelv_sim libs already carry this dep.
+        "//ip/debug/tool.vivado:debug",
+        "//ip/a200t",
+        "//ip/a200t:constants",
+        "//ip/axi",
+        "//ip/bridges/tool.vivado:bridges_sim",
+        "//ip/bridges/tool.vivado:gaisler_sim_custom",
+        "//ip/bridges/tool.vivado:grlib_sim",
+        "//ip/bridges/tool.vivado:techmap_sim",
+        "//ip/ddr3",
+        "//ip/general/tool.vivado:general",
+        "//ip/wb/tool.vivado:wb",
+        "//ip/wb_uart/vivado:wb_uart",
+        "//testing/a200t:a200t_clk",
+        "//testing/a200t:a200t_ddr3",
+        "//testing/adt/tool.vivado:adt",
+        "//testing/tool.vivado:testing",
+        "//third_party/serv:serv_vivado",
+        "//third_party/serv:servile_vivado",
+        "//third_party/uart:third_party_uart",
+        "//third_party/uberddr3",
+        "//third_party/vunit/tool.vivado:vunit_lib",
+        "//third_party/xilinx:unisim",
+    ],
+)
+
+vivado_library(
+    name = "tb_only",
+    # Force Rebuild 1
+    standard = "2008",
+    # do not sort
+    srcs = [
+        "//boards/noelv:tb_noelvsys_only_srcs",
+    ],
+    data = [
+        _NOELV_BOOT_MEMH,
+    ],
+    deps = [
+        ":noelv_sim",
+        "//ip/a200t",
+        "//ip/a200t:constants",
+        "//ip/axi",
+        "//ip/bridges/tool.vivado:bridges_sim",
+        "//ip/bridges/tool.vivado:gaisler_sim_custom",
+        "//ip/bridges/tool.vivado:grlib_sim",
+        "//ip/bridges/tool.vivado:techmap_sim",
+        "//ip/ddr3",
+        "//ip/general/tool.vivado:general",
+        "//ip/wb/tool.vivado:wb",
+        "//ip/wb_uart/vivado:wb_uart",
+        "//testing/tool.vivado:testing",
+        "//third_party/vunit/tool.vivado:vunit_lib",
+        "//third_party/xilinx:unisim",
+    ],
+)
+
+# Runs at about 1h real time for 100us simulated.
+vivado_simulation(
+    name = "sim",
+    data = [
+        _MEMH,
+        _HEXFILE,
+        _NOELV_BOOT_MEMH,
+    ],
+    extra_modules = ["glbl.glbl"],
+    generic_tops = _GENERICS | {
+        "sim_duration_ns": _SIM_DURATION_NS,
+    },
+    library = ":tb",
+    top = "tb",
+    xelab_args = [
+        "-mt",
+        "off",
+        "-debug",
+        "typical",
+        "-O0",
+    ],
+    xelab_relaxed = True,
+)
+
+# A simulation target for Noel-V only (no SERV).
+vivado_simulation(
+    name = "sim_only",
+    data = [
+        _NOELV_BOOT_MEMH,
+    ],
+    extra_modules = ["glbl.glbl"],
+    generic_tops = {
+        "sim_duration_ns": _SIM_DURATION_NS,
+        "noelv_memfile": "$(location {})".format(_NOELV_BOOT_MEMH),
+        "noelv_memsize": "4096",
+    },
+    library = ":tb_only",
+    top = "tb_noelvsys_only",
+    xelab_args = [
+        "-mt",
+        "off",
+        "-debug",
+        "typical",
+        "-O0",
+    ],
+    xelab_relaxed = True,
+)
+
+# A test version of the simulation above.
+vivado_test(
+    name = "test",
+    data = [
+        _MEMH,
+        _HEXFILE,
+        _NOELV_BOOT_MEMH,
+    ],
+    generic_tops = _GENERICS | {
+        # Long enough for SERV to hand off and NOEL-V to transmit "halt."
+        # (~265 us at the ~195 kbaud simulation rate).
+        "sim_duration_ns": _SIM_DURATION_NS,
+    },
+    library = ":tb",
+    timeout = "long",
+    top = "tb",
+    xelab_args = [
+        "-mt",
+        "off",
+        "-debug",
+        "typical",
+        "-O0",
+    ],
+    xelab_relaxed = True,
+)
+
+vivado_synthesis2(
+    name = "synth",
+    # do not sort
+    srcs = [
+        "//boards/noelv:noelv_files",
+        _SERV_UPLOAD_MEMH,
+    ],
+    data = [
+        _SERV_UPLOAD_MEMH,
+        _SERV_UPLOAD_HEX,
+        # Hardware NOEL-V boot at the realistic 115200 bps (SIM_FAST=0), matching
+        # the SERV UART so both halves of the muxed UART use the same rate.
+        "//bin/noelv_boot:memh_hw",
+    ],
+    generics = _GENERICS | {
+        "BAUD_RATE": "115200",
+        # Hardware SERV program is the ihex uploader (sim keeps noelv_serv_boot).
+        "MEMFILE": "$(location {})".format(_SERV_UPLOAD_MEMH),
+        "HEXFILE": "$(location {})".format(_SERV_UPLOAD_HEX),
+        "NOELV_MEMFILE": "$(location //bin/noelv_boot:memh_hw)",
+    },
+    part = "xc7a200tfbg484-2",
+    top = "board",
+    xdcs = [
+        "//ip/a200t:xdcs",
+    ],
+    deps = [
+        ":noelv",
+        "//ip/a200t",
+        "//ip/a200t:constants",
+        "//ip/axi",
+        "//ip/ddr3",
+        "//ip/wb/tool.vivado:wb",
+        "//ip/wb_uart/vivado:wb_uart",
+        "//third_party/serv:serv_vivado",
+        "//third_party/serv:servile_vivado",
+        "//third_party/uart:third_party_uart",
+        "//third_party/uberddr3",
+    ],
+)
+
+vivado_place_and_route2(
+    name = "pnr",
+    synthesis = ":synth",
+    xdcs = [
+        "//ip/a200t:xdcs",
+    ],
+    # Post-route physical optimization. The HP NOEL-V core pushes the design to
+    # the timing edge; the only post-route setup miss is the DDR3 controller's
+    # high-fanout reset (o_phy_reset). phys_opt_design's fanout/critical-cell
+    # optimization replicates such drivers to shorten routes and close the gap.
+    post_route_design = [
+        "phys_opt_design -directive Explore",
+    ],
+)
+
+vivado_program_device(
+    name = "prog",
+    data = [
+        "//third_party/xilinx/prog_daemon",
+        "//third_party/xilinx/prog_daemon:run",
+    ],
+    prog_daemon = "//third_party/xilinx/prog_daemon:run",
+    prog_daemon_args = [
+        "--daemon-binary=./third_party/xilinx/prog_daemon/prog_daemon_/prog_daemon",
+        "--",  # Following args are args for the prog_daemon.
+        "--daemon-binary=./third_party/xilinx/hw_server/upload.bash",
+        "--",  # Following args are for the upload.bash script.
+        "--upload-shar=./third_party/xilinx/hw_server/hw_server.shar",
+        "--prog-server=your-prog-server.example",
+    ],
+    deps = [
+        ":pnr",
+    ],
+)
+
+# NOEL-V memory write/read self-test: boots noelv_ddr3test in the NOEL-V-only
+# testbench (no SERV, no DDR3 PHY) and checks the core can write+read 0x40000.
+vivado_test(
+    name = "ddr3test",
+    data = [
+        "//bin/noelv_ddr3test:memh",
+    ],
+    generic_tops = {
+        "sim_duration_ns": "500000",
+        "noelv_memfile": "$(location //bin/noelv_ddr3test:memh)",
+        "noelv_memsize": "4096",
+    },
+    library = ":tb_only",
+    timeout = "long",
+    top = "tb_noelvsys_only",
+    xelab_args = [
+        "-mt",
+        "off",
+        "-debug",
+        "typical",
+        "-O0",
+    ],
+    xelab_relaxed = True,
+)
+
+# Waveform/trace sibling of :ddr3test -- runs the same DDR3 write/read self-test
+# (noelv_ddr3test: sw 0xCAFEF00D -> 0x40000, lw back, "halt." on match) on the
+# NOEL-V-only testbench, but as a vivado_simulation with a short duration so the
+# tb_noelvsys_only AHB monitor's log is easy to read.  The monitor prints every
+# low-region access on noelv_ahbsi with hready + hrdata (which the HW recorder
+# cannot see), so we can tell whether the store ISSUES and COMPLETES -- i.e.
+# whether the on-hardware "DDR3 write never reaches the bus" hang reproduces in
+# pure simulation against a plain writable BRAM (no DDR3 PHY).
+vivado_simulation(
+    name = "ddr3test_trace",
+    data = [
+        "//bin/noelv_ddr3test:memh",
+    ],
+    extra_modules = ["glbl.glbl"],
+    generic_tops = {
+        # 500 us: at 200 kbaud each UART byte is ~50 us, so "halt.\r\n" (7 B,
+        # held in the 8-deep TX FIFO) needs ~350 us to fully transmit.
+        "sim_duration_ns": "500000",
+        "noelv_memfile": "$(location //bin/noelv_ddr3test:memh)",
+        "noelv_memsize": "4096",
+    },
+    library = ":tb_only",
+    top = "tb_noelvsys_only",
+    xelab_args = [
+        "-mt",
+        "off",
+        "-debug",
+        "typical",
+        "-O0",
+    ],
+    xelab_relaxed = True,
+    # 500 us of sim takes ~3.5 min wall-clock; keep it off wildcard (//...) runs.
+    tags = ["manual"],
+)
+
+# OpenSBI bring-up simulation: NOEL-V-only testbench (behavioral BRAM, no SERV,
+# no DDR3 PHY) with OpenSBI pre-loaded into the low "DDR3" RAM at 0x40000 and a
+# minimal boot stub (//bin/noelv_sim_boot) in the boot BRAM that jumps straight
+# there.  `disas=1` prints the full retired-instruction trace and the tb's
+# ahb_monitor prints every bus transfer, so we can see exactly where OpenSBI's
+# coldboot dies (sbi_domain_init) -- offline, without the hardware. The low RAM
+# is 2 MiB with reg_bit_count=21 so 0x40000 decodes without aliasing.
+#   bazel run //boards/noelv/tool.vivado:opensbi_trace 2>&1 | tee /tmp/osbi.log
+_OPENSBI_LOWRAM_MEM = "//boards/noelv:opensbi_fw_hello_lowram_mem"
+_SIM_BOOT_MEMH = "//bin/noelv_sim_boot:memh"
+
+vivado_simulation(
+    name = "opensbi_trace",
+    data = [
+        _SIM_BOOT_MEMH,
+        _OPENSBI_LOWRAM_MEM,
+    ],
+    extra_modules = ["glbl.glbl"],
+    generic_tops = {
+        # 10 ms.  With libfdt ASSUME_PERFECT + the 4 skipped early-init scans,
+        # generic_early_init shrinks from ~6 ms to ~1 ms: domain_init ~3 ms, early
+        # init ~4 ms, sbi_hart_init/banner ~5 ms, domain_finalize +
+        # sbi_hart_pmp_configure ~8 ms.  Goal: see WHERE the boot actually hangs
+        # (hang_addr catches an sbi_hart_hang spin; a silent wedge = trace stops;
+        # full boot = banner UART writes + payload).
+        "sim_duration_ns": "10000000",
+        "noelv_memfile": "$(location {})".format(_SIM_BOOT_MEMH),
+        "noelv_memsize": "4096",
+        "lowmem_file": "$(location {})".format(_OPENSBI_LOWRAM_MEM),
+        # 36 MiB / regbits=26 (decodes haddr[25:2], no aliasing below 0x2400000).
+        # Must cover OpenSBI's FDT RELOCATION target: fw_base.S copies the FDT to
+        # fw_next_arg1() = 0x2240000 (~35.8 MB, valid DRAM on HW).  A smaller RAM
+        # aliases 0x2240000 mod size back onto the 0x40000 code and crashes the
+        # sim (illegal instruction in _start_warm) -- a sim artifact, not the bug.
+        "lowmem_size": "37748736",  # 0x2400000 (36 MiB)
+        "lowmem_regbits": "26",
+        "disas": "1",
+        # sbi_hart_hang @0x4e706 (= 321286) -- finish when the core spins here.
+        "hang_addr": "321286",
+    },
+    library = ":tb_only",
+    top = "tb_noelvsys_only",
+    xelab_args = [
+        "-mt",
+        "off",
+        # -O0 only: both -O2 and -O3 FATAL_ERROR at time 0 in iunv_relaxed.vhd
+        # (xsim mis-optimizes the relaxed NOEL-V integer-unit compile).  So the
+        # sim is slow; instead we bound wall time with hang-detection in the
+        # testbench (hang_addr) + a generous duration that stops at the hang.
+        "-O0",
+    ],
+    xelab_relaxed = True,
+    tags = ["manual"],
+)
+
+# Fuchsia boot-shim diagnosis sim: OpenSBI + the REAL //third_party/fuchsia
+# riscv64-boot-shim payload (not the hello build) in the NOEL-V-only tb, disas=1.
+# Runs past the S-mode handoff to capture WHERE the shim faults -- the post-MEDELEG
+# recurring trap seen on HW (log42).  The tb uses ahb_bram (byte-writes + LR/SC
+# both work), so this looks *past* the bridge bugs the cache fix targets and shows
+# the shim's intrinsic fault.  No hang_addr (the shim's trap PC is unknown), so the
+# sim runs the full duration; the trace shows boot + handoff + the first traps.
+#   bazel run //boards/noelv/tool.vivado:opensbi_trace_fuchsia 2>&1 | tee /tmp/fx.log
+_OPENSBI_FUCHSIA_LOWRAM_MEM = "//boards/noelv:opensbi_fw_lowram_mem"
+
+vivado_simulation(
+    name = "opensbi_trace_fuchsia",
+    data = [
+        _SIM_BOOT_MEMH,
+        _OPENSBI_FUCHSIA_LOWRAM_MEM,
+    ],
+    extra_modules = ["glbl.glbl"],
+    generic_tops = {
+        "sim_duration_ns": "12000000",  # 12 ms: boot ~8 ms, then handoff + shim fault
+        "noelv_memfile": "$(location {})".format(_SIM_BOOT_MEMH),
+        "noelv_memsize": "4096",
+        "lowmem_file": "$(location {})".format(_OPENSBI_FUCHSIA_LOWRAM_MEM),
+        "lowmem_size": "37748736",  # 0x2400000 (36 MiB), covers FDT reloc @0x2240000
+        "lowmem_regbits": "26",
+        "disas": "1",
+    },
+    library = ":tb_only",
+    top = "tb_noelvsys_only",
+    xelab_args = [
+        "-mt",
+        "off",
+        "-O0",
+    ],
+    xelab_relaxed = True,
+    tags = ["manual"],
+)
+
+# rung-3 reservation debug in sim: OpenSBI + real boot-shim + board_zircon_dtb (so
+# OpenSBI's mmode_resv /reserved-memory is in the FDT the shim parses).  No ZBI in
+# the 36 MiB sim RAM, so the shim will fault when it dereferences the /chosen initrd
+# at 0x10000000 -- but its memory matcher + MEM_CONFIG build run BEFORE that, so the
+# disas trace shows exactly what the matcher does with OpenSBI's reservation
+# (the HW-unobservable step, sidestepping the rung-3 UART silence + slow uploads).
+#   bazel run //boards/noelv/tool.vivado:opensbi_trace_zircon 2>&1 | tee /tmp/z.log
+_OPENSBI_ZIRCON_LOWRAM_MEM = "//boards/noelv:opensbi_fw_zircon_lowram_mem"
+
+vivado_simulation(
+    name = "opensbi_trace_zircon",
+    data = [
+        _SIM_BOOT_MEMH,
+        _OPENSBI_ZIRCON_LOWRAM_MEM,
+    ],
+    extra_modules = ["glbl.glbl"],
+    generic_tops = {
+        "sim_duration_ns": "12000000",  # 12 ms: boot ~8 ms, then handoff + shim matcher
+        "noelv_memfile": "$(location {})".format(_SIM_BOOT_MEMH),
+        "noelv_memsize": "4096",
+        "lowmem_file": "$(location {})".format(_OPENSBI_ZIRCON_LOWRAM_MEM),
+        "lowmem_size": "37748736",  # 0x2400000 (36 MiB), covers FDT reloc @0x2240000
+        "lowmem_regbits": "26",
+        "disas": "1",
+    },
+    library = ":tb_only",
+    top = "tb_noelvsys_only",
+    xelab_args = [
+        "-mt",
+        "off",
+        "-O0",
+    ],
+    xelab_relaxed = True,
+    tags = ["manual"],
+)
+
+# FAITHFUL full-system duplicate of the HARDWARE boot: the exact image (OpenSBI +
+# shim + the REAL ZBI @0x10000000 + board_zircon_dtb), OpenSBI actually running its
+# FDT fixups + S-mode handoff -> shim -> physboot.  The ZBI sits at its true address
+# via a SECOND low-RAM bank (a single ahb_bram caps at 256 MiB = xsim's 2**31-bit
+# array limit): lowmem backs 0x0-0xFFFFFFF (boot + placement), zbimem backs
+# 0x10000000-0x103FFFFF (the ZBI).  disas=0 (the full ~8ms boot is too long for a
+# per-insn trace); the tb's ahb_monitor prints every low-region store, so physboot's
+# placement -- e.g. a write to 0x0 -- is directly visible as "AHBMON ... WR 0x...",
+# letting us re-examine the placement diagnosis with real visibility, not JTAG.
+#   bazel build //boards/noelv/tool.vivado:opensbi_trace_zircon_zbi
+_KERNEL_ZBI_MEM = "//boards/noelv:kernel_zbi_mem"
+
+vivado_simulation(
+    name = "opensbi_trace_zircon_zbi",
+    data = [
+        _SIM_BOOT_MEMH,
+        _OPENSBI_ZIRCON_LOWRAM_MEM,
+        _KERNEL_ZBI_MEM,
+    ],
+    extra_modules = ["glbl.glbl"],
+    generic_tops = {
+        # 50 ms: measured (2026-07-02 run) the OpenSBI banner lands at ~17.8 ms,
+        # not ~8 ms: 0-9.8 ms fw_platform_init + fdt_serial_init scans, 9.9 ms
+        # coldboot tracer S..D (sbi_domain_init PASSES -- the old xsim fdt hang
+        # did not recur), 17.8 ms banner, 20 ms cut mid boot-prints.  50 ms
+        # budgets banner + domain prints + handoff + shim + physboot placement
+        # (~10 min/ms xsim wall, ~8 h total).
+        "sim_duration_ns": "50000000",
+        "noelv_memfile": "$(location {})".format(_SIM_BOOT_MEMH),
+        "noelv_memsize": "4096",
+        # Bank 1 (lowmem): firmware (OpenSBI+shim+DTB, NO ZBI) at 0x40000.  64 MiB
+        # array (regbits 26 -> 64 MiB index range = array, no out-of-bounds).  A
+        # 256 MiB array passes the VHDL size check but xsim's C backend fails on the
+        # 67M-element zero-init (load_mem tmp:=(others=>0)); 64 MiB (16M, ~1.7x the
+        # proven 36 MiB sims) covers boot + FDT@0x2240000 + a placement up to 64 MiB.
+        # hmask=0xF00 decodes 0x0-0xFFFFFFF, so a placement in 64-256 MiB still shows
+        # its real addr in the ahb_monitor (data aliases); the 0x0 bug lands < 64 MiB.
+        "lowmem_file": "$(location {})".format(_OPENSBI_ZIRCON_LOWRAM_MEM),
+        "lowmem_size": "67108864",  # 0x4000000 (64 MiB) -- matches regbits 26 decode, no out-of-bounds in 0x0-0x3FFFFFFF
+        "lowmem_regbits": "26",
+        # Bank 2 (zbimem): the REAL ZBI at its true 0x10000000-0x103FFFFF (4 MiB).
+        "zbi_file": "$(location {})".format(_KERNEL_ZBI_MEM),
+        "zbi_size": "4194304",  # 4 MiB (ZBI is ~1.85 MB)
+        "zbi_regbits": "22",  # haddr[21:2] indexes the 4 MiB bank
+        "zbi_haddr": "256",  # 0x100 -> haddr[31:20]=0x100 = 0x10000000
+        "zbi_hmask": "4092",  # 0xFFC -> 4 MiB window 0x10000000-0x103FFFFF
+        "disas": "0",
+    },
+    # No-VCD run script: the default tcl dumps every core signal (multi-GB + huge
+    # per-cycle overhead -> the ~8ms boot takes hours).  We only need the
+    # ahb_monitor stdout (the placement), so just `run -all`.
+    custom_tcl_script = "sim_no_vcd.tcl",
+    library = ":tb_only",
+    top = "tb_noelvsys_only",
+    xelab_args = [
+        "-mt",
+        "off",
+        "-O0",
+    ],
+    xelab_relaxed = True,
+    tags = ["manual"],
+)
+
+# THE full faithful Zircon boot sim (user-requested 2026-07-03: "one full proven
+# boot in the simulator, no matter how long"): full OpenSBI (S-mode handoff,
+# resident SBI runtime) -> shim -> physboot -> Zircon, with the SIM memory map
+# (opensbi_fw_zircon_sim / board_zircon_sim_dtb: declared RAM == what the banks
+# serve: 64 MiB low + 4 MiB ZBI@0x10000000) so a multi-day run never touches
+# aliased/unmapped space.  Timeline (measured, ~10 min/ms xsim wall): banner
+# ~17.8 ms, driver scans past ~47 ms; handoff, shim, physboot follow -- watch
+# AHBMON for the first 0x240000 fetch (shim), 0x10000000 reads (ZBI), and the
+# kernel placement writes.  600 ms budget = run until proven or refuted; kill it
+# when the answer is in.
+vivado_simulation(
+    name = "zircon_full_boot",
+    data = [
+        _SIM_BOOT_MEMH,
+        "//boards/noelv:opensbi_fw_zircon_sim_lowram_mem",
+        _KERNEL_ZBI_MEM,
+    ],
+    extra_modules = ["glbl.glbl"],
+    generic_tops = {
+        # 2 s sim = watchdog only; we monitor AHBMON and stop the sim once the
+        # boot is proven (or refuted).  Undersizing would force a restart of a
+        # multi-day run; oversizing costs nothing.
+        "sim_duration_ns": "2000000000",
+        "noelv_memfile": "$(location {})".format(_SIM_BOOT_MEMH),
+        "noelv_memsize": "4096",
+        "lowmem_file": "$(location //boards/noelv:opensbi_fw_zircon_sim_lowram_mem)",
+        "lowmem_size": "67108864",  # 64 MiB array == the declared memory@a0000
+        "lowmem_regbits": "26",
+        "zbi_file": "$(location {})".format(_KERNEL_ZBI_MEM),
+        "zbi_size": "4194304",  # 4 MiB == the declared memory@10000000
+        "zbi_regbits": "22",
+        "zbi_haddr": "256",  # 0x10000000, the REAL HW ZBI address
+        "zbi_hmask": "4092",
+        "disas": "0",
+    },
+    custom_tcl_script = "sim_no_vcd.tcl",
+    library = ":tb_only",
+    top = "tb_noelvsys_only",
+    xelab_args = [
+        "-mt",
+        "off",
+        "-O0",
+    ],
+    xelab_relaxed = True,
+    tags = ["manual"],
+)
+
+# ZIRCON rung-3 boot sim WITHOUT OpenSBI: the //bin/noelv_zircon_handoff stub
+# jumps straight into the riscv64-boot-shim at 0x240000 (inside the zircon
+# lowram image) with a1 = the embedded ZBI-aware DTB (fw_fdt_bin @0x5c000,
+# chosen/linux,initrd -> the ZBI bank at 0x10000000).  Sidesteps the xsim
+# post-banner fdt wedge AND the ~18 ms OpenSBI boot (2026-07-02 run), so the
+# whole budget goes to shim + physboot.  Watch AHBMON for: DTB reads @0x5cxxx,
+# ZBI reads @0x10xxxxxx, kernel placement writes; a stub-latched fault spins
+# (rerun short with disas=1 to read s0/s1/s2 = mcause/mepc/mtval).
+vivado_simulation(
+    name = "zircon_zbi_handoff_trace",
+    data = [
+        "//bin/noelv_zircon_handoff:memh",
+        "//boards/noelv:opensbi_fw_zircon_sim_lowram_mem",
+        _KERNEL_ZBI_MEM,
+    ],
+    extra_modules = ["glbl.glbl"],
+    generic_tops = {
+        # 150 ms: the 20 ms probe caught the shim RELOCATING the ZBI from
+        # 0x10000000 to low RAM at dest = src-offset + 0x102010, ~15 KB/ms sim
+        # (~230 KB of 1.85 MB done at cutoff, container trailer validated, no
+        # fault).  150 ms sees the copy cross the shim's own 0x240000 region
+        # (~90 ms -- self-overwrite hazard unless the shim self-relocated, the
+        # early 0x27Exxx writes suggest it did), the full copy (~125 ms), and
+        # the physboot jump.  Uses the SIM firmware (board_zircon_sim_dtb @ the
+        # same fw_fdt_bin 0x5c000, verified) = a true miniature of
+        # zircon_full_boot's post-handoff phase.
+        "sim_duration_ns": "150000000",
+        "noelv_memfile": "$(location //bin/noelv_zircon_handoff:memh)",
+        "noelv_memsize": "4096",
+        "lowmem_file": "$(location //boards/noelv:opensbi_fw_zircon_sim_lowram_mem)",
+        "lowmem_size": "67108864",  # 64 MiB, same window as the zbi target
+        "lowmem_regbits": "26",
+        "zbi_file": "$(location {})".format(_KERNEL_ZBI_MEM),
+        "zbi_size": "4194304",  # 4 MiB (ZBI ~1.85 MB)
+        "zbi_regbits": "22",
+        "zbi_haddr": "256",  # 0x10000000
+        "zbi_hmask": "4092",  # 4 MiB window
+        "disas": "0",
+    },
+    custom_tcl_script = "sim_no_vcd.tcl",
+    library = ":tb_only",
+    top = "tb_noelvsys_only",
+    xelab_args = [
+        "-mt",
+        "off",
+        "-O0",
+    ],
+    xelab_relaxed = True,
+    tags = ["manual"],
+)
+
+# S-mode fault repro WITH FULL VCD (see //bin/noelv_smode_fault_repro): entry0-
+# only PMP + S-mode mret = the zircon_full_boot handoff fault in ~us.  DEFAULT
+# tcl (no custom_tcl_script) = dump every core signal; 30 us keeps the VCD
+# small.  Analyze where X appears in the PMP/fetch-permission chain
+# (pmpaddr1..15 / pmpcfg / pmp_precalc / the icache permission check).
+vivado_simulation(
+    name = "smode_csr_xdump",
+    data = [
+        "//bin/noelv_smode_fault_repro:memh",
+        "//boards/noelv:opensbi_fw_zircon_sim_lowram_mem",
+        _KERNEL_ZBI_MEM,
+    ],
+    extra_modules = ["glbl.glbl"],
+    generic_tops = {
+        "sim_duration_ns": "30000",
+        "noelv_memfile": "$(location //bin/noelv_smode_fault_repro:memh)",
+        "noelv_memsize": "4096",
+        "lowmem_file": "$(location //boards/noelv:opensbi_fw_zircon_sim_lowram_mem)",
+        "lowmem_size": "67108864",
+        "lowmem_regbits": "26",
+        "zbi_file": "$(location {})".format(_KERNEL_ZBI_MEM),
+        "zbi_size": "4194304",
+        "zbi_regbits": "22",
+        "zbi_haddr": "256",
+        "zbi_hmask": "4092",
+        "disas": "1",
+    },
+    # get_value CAN read VHDL records (VCD cannot): stop just past the S-mode
+    # fault and print every r.csr field, flagging X/U carriers (grep CSRX).
+    custom_tcl_script = "sim_csr_xdump.tcl",
+    library = ":tb_only",
+    top = "tb_noelvsys_only",
+    xelab_args = [
+        "-mt",
+        "off",
+        "-debug",
+        "typical",
+        "-O0",
+    ],
+    xelab_relaxed = True,
+    tags = ["manual"],
+)
+
+vivado_simulation(
+    name = "smode_fault_vcd",
+    data = [
+        "//bin/noelv_smode_fault_repro:memh",
+        "//boards/noelv:opensbi_fw_zircon_sim_lowram_mem",
+        _KERNEL_ZBI_MEM,
+    ],
+    extra_modules = ["glbl.glbl"],
+    generic_tops = {
+        "sim_duration_ns": "30000",  # 30 us: fault lands ~1 us in
+        "noelv_memfile": "$(location //bin/noelv_smode_fault_repro:memh)",
+        "noelv_memsize": "4096",
+        "lowmem_file": "$(location //boards/noelv:opensbi_fw_zircon_sim_lowram_mem)",
+        "lowmem_size": "67108864",
+        "lowmem_regbits": "26",
+        "zbi_file": "$(location {})".format(_KERNEL_ZBI_MEM),
+        "zbi_size": "4194304",
+        "zbi_regbits": "22",
+        "zbi_haddr": "256",
+        "zbi_hmask": "4092",
+        "disas": "1",
+    },
+    library = ":tb_only",
+    top = "tb_noelvsys_only",
+    xelab_args = [
+        "-mt",
+        "off",
+        "-debug",
+        "typical",
+        "-O0",
+    ],
+    xelab_relaxed = True,
+    tags = ["manual"],
+)
+
+# S-mode PMP-X probe (see //bin/noelv_smode_probe): does zeroing ALL PMP CSRs
+# make the S-mode `mret` into the shim WORK in sim?  Decides the
+# zircon_full_boot handoff trap-loop root cause (sim-X in unprogrammed pmp
+# entries vs real core denial).  Short + disas=1: the answer lands in ~10 us
+# (either shim insns commit at 0x2400xx or s0/s1 latch mcause=1/0x240000).
+vivado_simulation(
+    name = "smode_pmp_probe",
+    data = [
+        "//bin/noelv_smode_probe:memh",
+        "//boards/noelv:opensbi_fw_zircon_sim_lowram_mem",
+        _KERNEL_ZBI_MEM,
+    ],
+    extra_modules = ["glbl.glbl"],
+    generic_tops = {
+        "sim_duration_ns": "500000",  # 500 us
+        "noelv_memfile": "$(location //bin/noelv_smode_probe:memh)",
+        "noelv_memsize": "4096",
+        "lowmem_file": "$(location //boards/noelv:opensbi_fw_zircon_sim_lowram_mem)",
+        "lowmem_size": "67108864",
+        "lowmem_regbits": "26",
+        "zbi_file": "$(location {})".format(_KERNEL_ZBI_MEM),
+        "zbi_size": "4194304",
+        "zbi_regbits": "22",
+        "zbi_haddr": "256",
+        "zbi_hmask": "4092",
+        "disas": "1",
+    },
+    custom_tcl_script = "sim_no_vcd.tcl",
+    library = ":tb_only",
+    top = "tb_noelvsys_only",
+    xelab_args = [
+        "-mt",
+        "off",
+        "-O0",
+    ],
+    xelab_relaxed = True,
+    tags = ["manual"],
+)
+
+# Shim-fault diagnosis: a minimal M-mode handoff stub (//bin/noelv_shim_handoff)
+# mrets straight into the Fuchsia shim at 0x240000 (reusing opensbi_fw_lowram_mem,
+# where the shim is already linked), bypassing the too-slow-to-simulate OpenSBI
+# boot.  disas=1 + a short duration capture the shim's setup and its first fault;
+# the stub's m_trap latches mcause/mepc/mtval into s0/s1/s2 (look for W[s0..s2]).
+#   bazel run //boards/noelv/tool.vivado:shim_fault_trace 2>&1 | tee /tmp/sf.log
+vivado_simulation(
+    name = "shim_fault_trace",
+    data = [
+        "//bin/noelv_shim_handoff:memh",
+        _OPENSBI_FUCHSIA_LOWRAM_MEM,
+    ],
+    extra_modules = ["glbl.glbl"],
+    generic_tops = {
+        "sim_duration_ns": "500000",  # 500 us -- the shim runs to its fault in ~us
+        "noelv_memfile": "$(location //bin/noelv_shim_handoff:memh)",
+        "noelv_memsize": "4096",
+        "lowmem_file": "$(location {})".format(_OPENSBI_FUCHSIA_LOWRAM_MEM),
+        "lowmem_size": "37748736",  # 0x2400000 (36 MiB), covers shim + BSS @0x277xxx
+        "lowmem_regbits": "26",
+        "disas": "1",
+    },
+    library = ":tb_only",
+    top = "tb_noelvsys_only",
+    xelab_args = [
+        "-mt",
+        "off",
+        "-O0",
+    ],
+    xelab_relaxed = True,
+    tags = ["manual"],
+)
+
+# mseccfg.MML probe (//bin/noelv_mseccfg_test): boots a tiny RV64 program in the
+# NOEL-V-only testbench that reads CSR 0x747, sets MML, then `csrw 0x747,zero` and
+# reads it back.  disas=1 shows the readbacks (W[s0/s1/s2=...]) within ~1 us, so a
+# short duration answers whether the OpenSBI mseccfg.MML clear actually works on
+# this core (or traps = Smepmp not implemented).  Fast: no OpenSBI/FDT.
+vivado_simulation(
+    name = "mseccfg_test",
+    data = ["//bin/noelv_mseccfg_test:memh"],
+    extra_modules = ["glbl.glbl"],
+    generic_tops = {
+        "sim_duration_ns": "30000",  # 30 us -- CSR readbacks land in the first ~1 us
+        "noelv_memfile": "$(location //bin/noelv_mseccfg_test:memh)",
+        "noelv_memsize": "4096",
+        "disas": "1",
+    },
+    library = ":tb_only",
+    top = "tb_noelvsys_only",
+    xelab_args = [
+        "-mt",
+        "off",
+        "-debug",
+        "typical",
+        "-O0",
+    ],
+    xelab_relaxed = True,
+    tags = ["manual"],
+)
+
+# NOEL-V against the REAL board memory path (ahb2wb_bridge -> wb_mux ->
+# a200t.ram(sim) wide_wb+UberDDR3 -> Micron DDR3 model) -- reproduces the
+# hardware LR/SC failure offline (sc to DDR3 = 0/1000 on HW; sc to a 1-cycle
+# ahb_bram passes in :lrsctest_sim).  See tb_noelvsys_ddr3.vhdl.
+vivado_library(
+    name = "tb_ddr3",
+    standard = "2008",
+    # do not sort
+    srcs = [
+        "//boards/noelv:tb_noelvsys_ddr3_srcs",
+    ],
+    deps = [
+        ":noelv_sim",
+        "//ip/a200t",
+        "//ip/a200t:constants",
+        "//ip/axi",
+        "//ip/bridges/tool.vivado:bridges_sim",
+        "//ip/bridges/tool.vivado:gaisler_sim_custom",
+        "//ip/bridges/tool.vivado:grlib_sim",
+        "//ip/bridges/tool.vivado:techmap_sim",
+        "//ip/ddr3",
+        "//ip/general/tool.vivado:general",
+        "//ip/wb/tool.vivado:wb",
+        "//ip/wb_uart/vivado:wb_uart",
+        "//testing/a200t:a200t_ddr3",
+        "//testing/tool.vivado:testing",
+        "//third_party/uberddr3",
+        "//third_party/vunit/tool.vivado:vunit_lib",
+        "//third_party/xilinx:unisim",
+    ],
+)
+
+# lrsctest against the REAL DDR3 chain.  disas=1 prints every sc.d writeback
+# (W[t3 = 0 success / 1 failure]) within ~30 us of the post-calibration
+# release, so the verdict does NOT wait for the (1.3 ms) UART print.
+vivado_simulation(
+    name = "lrsctest_ddr3_sim",
+    data = ["//bin/noelv_lrsctest:memh"],
+    extra_modules = ["glbl.glbl"],
+    generic_tops = {
+        "sim_duration_ns": "400000",  # calib (~100+ us) + release + test
+        "noelv_memfile": "$(location //bin/noelv_lrsctest:memh)",
+        "noelv_memsize": "4096",
+        "disas": "1",
+    },
+    library = ":tb_ddr3",
+    top = "tb_noelvsys_ddr3",
+    xelab_args = [
+        "-mt",
+        "off",
+        "-O0",
+    ],
+    xelab_relaxed = True,
+    tags = ["manual"],
+)
+
+# LR/SC reservation probe in sim (//bin/noelv_lrsctest): runs lr.d/sc.d on the
+# low "DDR3" RAM (here a behavioral ahb_bram, not the real ahb2wb_bridge/DDR3).
+# On hardware lrsctest reports "LRSC BAD 0/1000" -- sc.d never succeeds, which
+# wedges OpenSBI's atomic_cmpxchg at the S-mode handoff.  This localizes the bug:
+#   - if sc.d ALSO fails here -> the core's reservation logic (caches disabled)
+#     is at fault, reproducible offline (then test enabling the D-cache in sim);
+#   - if sc.d SUCCEEDS here -> reservations are fine and the DDR3/bridge path
+#     (no exclusive monitor) is at fault, like the byte-strobe bug.
+# disas=1 prints W[...] register writes: after each sc.d, t3 = 0 (success) or 1
+# (failure) -- lands in the first ~10 us, so a short run answers the question.
+# Low RAM must decode 0x80000 (the lr/sc target): regbits=20 = 1 MiB.
+vivado_simulation(
+    name = "lrsctest_sim",
+    data = ["//bin/noelv_lrsctest:memh"],
+    extra_modules = ["glbl.glbl"],
+    generic_tops = {
+        "sim_duration_ns": "200000",  # 200 us; the sc.d result lands in ~10 us
+        "noelv_memfile": "$(location //bin/noelv_lrsctest:memh)",
+        "noelv_memsize": "4096",
+        "lowmem_size": "1048576",
+        "lowmem_regbits": "20",
+        "disas": "1",
+    },
+    library = ":tb_only",
+    top = "tb_noelvsys_only",
+    xelab_args = [
+        "-mt",
+        "off",
+        "-O0",
+    ],
+    xelab_relaxed = True,
+    tags = ["manual"],
+)
+
+# Interactive Vivado tcl REPL for inspecting the ddr3test_trace WDB -- the WDB
+# retains the record-typed AHB/cache signals the VCD drops, so this is how we
+# probe WHY the DDR-region store never drains from the core's store buffer.
+vivado_repl(
+    name = "repl",
+    # 3.9.0: no -it (runs headless) and stage the captured WDB into runfiles.
+    use_terminal = False,
+    data = [":ddr3test_trace"],
+    script = "wdb_probe.tcl",
+)
+
+vivado_view(
+    name = "view",
+    dep = ":sim",
+)
+

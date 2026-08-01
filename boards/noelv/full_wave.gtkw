@@ -1,0 +1,149 @@
+[*]
+[*] GTKWave Analyzer v3.4.0 (w)1999-2022 BSI
+[*] Thu Jun  4 09:37:11 2026
+[*]
+[dumpfile] "/home/filmil/.cache/bazel/_bazel_filmil/044c017957cb4bfe82e0fc27b83f1ca9/execroot/_main/bazel-out/k8-fastbuild/bin/boards/rv32_ddr3exec/tool.vivado/sim.vcd"
+[dumpfile_mtime] "Thu Jun  4 09:34:08 2026"
+[dumpfile_size] 2375715859
+[savefile] "/home/filmil/code/hw/a200t_examples/boards/rv32_ddr3exec/full_wave.gtkw"
+[timestart] 0
+[size] 2558 1353
+[pos] -1 -1
+*-30.269180 230351000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] tb.
+[treeopen] tb.uut0.
+[treeopen] tb.uut0.cpu0.cpu.
+[treeopen] tb.uut0.is_simulation_gen.
+[treeopen] tb.uut0.is_simulation_gen.ram0.
+[treeopen] tb.uut0.pic0.
+[treeopen] tb.uut0.timer0.
+[sst_width] 267
+[signals_width] 339
+[sst_expanded] 1
+[sst_vpaned_height] 645
+@200
+-==== SYSTEM ====
+@28
+tb.clk
+tb.reset
+@200
+-=== DDR3 ===
+@28
+tb.uut0.is_simulation_gen.ram0.calib_complete
+@200
+-=== UART1 ===
+@28
+tb.rxd
+tb.txd
+@200
+-=== ROM ===
+--- Request
+@28
+tb.uut0.bram0.dbg_wbi_cyc
+@22
+tb.uut0.bram0.dbg_wbi_adr[31:0]
+tb.uut0.bram0.dbg_wbi_dat[31:0]
+tb.uut0.bram0.dbg_wbi_sel[3:0]
+@28
+tb.uut0.bram0.dbg_wbi_we
+@200
+--- Response
+@28
+tb.uut0.bram0.dbg_wbo_ack
+@22
+tb.uut0.bram0.dbg_wbo_rdt[31:0]
+@200
+-==== DDR INTERFACE ====
+--- Request
+@28
+tb.uut0.is_simulation_gen.ram0.debug_host0.cyc
+tb.uut0.is_simulation_gen.ram0.debug_host0.we
+@22
+tb.uut0.is_simulation_gen.ram0.debug_host0.adr[31:0]
+tb.uut0.is_simulation_gen.ram0.debug_host0.dat[31:0]
+tb.uut0.is_simulation_gen.ram0.debug_host0.sel[3:0]
+@200
+--- Response
+@28
+tb.uut0.is_simulation_gen.ram0.debug_per0.ack
+@22
+tb.uut0.is_simulation_gen.ram0.debug_per0.rdt[31:0]
+@28
+tb.uut0.bram_sel
+@200
+-PIC ==========
+@28
+tb.uut0.pic0.decoder0.debug_ack
+@22
+tb.uut0.pic0.decoder0.debug_data[31:0]
+@24
+tb.uut0.pic0.decoder0.debug_index[31:0]
+@28
+tb.uut0.pic0.decoder0.debug_write
+@29
+tb.uut0.pic0.debug_r_irqs[1:0]
+tb.uut0.pic0.debug_r_mask[1:0]
+@22
+tb.uut0.pic0.decoder0.regi[31:0]
+tb.uut0.pic0.decoder0.rego[31:0]
+@28
+tb.uut0.pic0.irqi[1:0]
+tb.uut0.pic0.irqo
+@200
+-Register File ========
+---- Register Read
+@28
+tb.uut0.cpu0.rf_ram.i_ren
+@24
+tb.uut0.cpu0.rf_ram.i_raddr[5:0]
+@22
+tb.uut0.cpu0.rf_ram.o_rdata[31:0]
+@200
+---- Register Write
+@28
+tb.uut0.cpu0.rf_ram.i_wen
+@22
+tb.uut0.cpu0.rf_ram.i_waddr[5:0]
+tb.uut0.cpu0.rf_ram.i_wdata[31:0]
+tb.uut0.cpu0.rf_ram.rdata[31:0]
+@200
+-CPU PER =========
+@28
+tb.uut0.cpu0_per_debug.ack
+@22
+tb.uut0.cpu0_per_debug.rdt[31:0]
+@200
+-CPU HOST OUT =======
+@22
+tb.uut0.cpu0_host_debug.adr[31:0]
+@28
+tb.uut0.cpu0_host_debug.cyc
+@22
+tb.uut0.cpu0_host_debug.dat[31:0]
+tb.uut0.cpu0_host_debug.sel[3:0]
+@28
+tb.uut0.cpu0_host_debug.we
+@200
+-== CPU ===
+@28
+tb.uut0.cpu0.i_timer_irq
+tb.uut0.timer0.irq
+@200
+-TIMER0 ======
+@28
+tb.uut0.timer0.decoder0.debug_ack
+@24
+tb.uut0.timer0.decoder0.debug_data[31:0]
+tb.uut0.timer0.decoder0.debug_index[31:0]
+@28
+tb.uut0.timer0.decoder0.debug_write
+@24
+tb.uut0.timer0.decoder0.regi[31:0]
+@22
+tb.uut0.timer0.decoder0.rego[31:0]
+@28
+tb.uut0.timer0.irq
+@24
+tb.uut0.timer0.debug_count[31:0]
+[pattern_trace] 1
+[pattern_trace] 0

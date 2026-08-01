@@ -1,0 +1,588 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_dtc//:defs.bzl", "dtc_compile", "dts_test")
+load("@rules_nvc//build/nvc:rules.bzl", "wave_view")
+load("@rules_opensbi//build/opensbi:rules.bzl", "opensbi_firmware")
+
+package(default_visibility = ["//visibility:public"])
+
+# OpenSBI (1.6) fw_payload firmware for the Cocoapuffs/NOEL-V board:
+#   - payload: the RISC-V64 boot shim from //third_party/fuchsia
+#   - fdt:     board.dts compiled to a .dtb (via :board_dtb, rules_dtc)
+# Linked at 0x40000: the SERV ihex loader populates shared RAM at the ihex
+# addresses, and the NOEL-V boot stub (//bin/noelv_boot) jumps to 0x40000.
+# Defaults: generic fdt platform, march/mabi rv64imafdc_zicsr_zifencei / lp64
+# (matches the NV-HP core). Produces opensbi_fw.elf and opensbi_fw.bin.
+opensbi_firmware(
+    name = "opensbi_fw",
+    # DEBUG: make fw_payload.S's `#include "fw_base.S"` resolve to our vendored,
+    # instrumented copy in this package. The rule only adds -I for fw_src.dirname
+    # (which carries no fw_base.S) + the lib include dirs, so this -I is how the
+    # local fw_base.S below wins. Remove this + restore the stock fw_base.S in
+    # textual_hdrs once the trap cause is fixed.
+    copts = ["-Iboards/noelv"],
+    fdt = ":board_dtb",
+    fw_src = "@opensbi//:firmware/fw_payload.S",
+    fw_type = "payload",
+    lib = "@opensbi//:generic",
+    linker_script = "@opensbi//:firmware/fw_payload.elf.ldS",
+    payload = "//third_party/fuchsia:riscv64-boot-shim",
+    text_start = "0x40000",
+    textual_hdrs = [
+        # DEBUG override (see copts above): vendored fw_base.S with a bit-bang in
+        # _trap_handler that prints "T <mcause> <mepc>" to the APBUART, so an
+        # early pre-console fatal trap is visible instead of a silent
+        # sbi_hart_hang. The stock "@opensbi//:firmware/fw_base.S" is dropped.
+        "fw_base.S",
+        "@opensbi//:firmware/fw_base.ldS",
+    ],
+)
+
+# Intel HEX of the OpenSBI firmware (its ELF, which carries the 0x40000 load
+# addresses), for upload via the SERV ihex loader (//bin/noelv_serv_upload).
+# opensbi_firmware exposes elf+bin together, so select the .elf before objcopy.
+genrule(
+    name = "opensbi_fw_hex",
+    srcs = [":opensbi_fw"],
+    outs = ["opensbi_fw.hex"],
+    cmd = "$(execpath @riscv_none_elf//:objcopy) -O ihex " +
+          "$$(echo $(SRCS) | tr ' ' '\\n' | grep -E '[.]elf$$') $@",
+    tools = ["@riscv_none_elf//:objcopy"],
+)
+
+# EXPERIMENT (rung 2): the boot-shim is a RISC-V Linux Image (text_offset=0), which
+# must be loaded at a 2 MB-aligned base.  The default payload_offset (0x200000) puts
+# it at text_start(0x40000)+0x200000 = 0x240000, which is NOT 2 MB-aligned -- a
+# suspect for the early PhysMain illegal-instruction fault (bad frame pointer).
+# payload_offset 0x1c0000 lands the shim at 0x200000 (2 MB-aligned).
+opensbi_firmware(
+    name = "opensbi_fw_shim_2m",
+    copts = ["-Iboards/noelv"],
+    fdt = ":board_dtb",
+    fw_src = "@opensbi//:firmware/fw_payload.S",
+    fw_type = "payload",
+    lib = "@opensbi//:generic",
+    linker_script = "@opensbi//:firmware/fw_payload.elf.ldS",
+    payload = "//third_party/fuchsia:riscv64-boot-shim",
+    payload_offset = "0x1c0000",
+    text_start = "0x40000",
+    textual_hdrs = [
+        "fw_base.S",
+        "@opensbi//:firmware/fw_base.ldS",
+    ],
+)
+
+genrule(
+    name = "opensbi_fw_shim_2m_hex",
+    srcs = [":opensbi_fw_shim_2m"],
+    outs = ["opensbi_fw_shim_2m.hex"],
+    cmd = "$(execpath @riscv_none_elf//:objcopy) -O ihex " +
+          "$$(echo $(SRCS) | tr ' ' '\\n' | grep -E '[.]elf$$') $@",
+    tools = ["@riscv_none_elf//:objcopy"],
+)
+
+# Same OpenSBI core as :opensbi_fw, but with a minimal "hello world" payload
+# (//bin/opensbi_hello) instead of the 229 KB Linux boot shim. The payload is
+# downstream of the current sbi_hart_init hang (so it won't change that symptom),
+# but it roughly halves the firmware -> a much shorter serial upload for faster
+# debug iterations, and -- once sbi_hart_init is fixed -- isolates whether the
+# OpenSBI->payload handoff + console path work.
+opensbi_firmware(
+    name = "opensbi_fw_hello",
+    copts = ["-Iboards/noelv"],
+    fdt = ":board_dtb",
+    fw_src = "@opensbi//:firmware/fw_payload.S",
+    fw_type = "payload",
+    lib = "@opensbi//:generic",
+    linker_script = "@opensbi//:firmware/fw_payload.elf.ldS",
+    payload = "//bin/opensbi_hello:bin",
+    text_start = "0x40000",
+    textual_hdrs = [
+        "fw_base.S",
+        "@opensbi//:firmware/fw_base.ldS",
+    ],
+)
+
+# Intel HEX of the hello-world firmware, for serial upload.
+genrule(
+    name = "opensbi_fw_hello_hex",
+    srcs = [":opensbi_fw_hello"],
+    outs = ["opensbi_fw_hello.hex"],
+    cmd = "$(execpath @riscv_none_elf//:objcopy) -O ihex " +
+          "$$(echo $(SRCS) | tr ' ' '\\n' | grep -E '[.]elf$$') $@",
+    tools = ["@riscv_none_elf//:objcopy"],
+)
+
+# Same OpenSBI core as :opensbi_fw, but with the self-contained Fuchsia Cocoapuffs
+# "hello" image (//third_party/fuchsia:cocoapuffs-hello -- a ~28 KB RISC-V Linux
+# Image with the kernel included) as the payload, to test the full boot path
+# end to end.  Keeps the vendored fw_base.S trap bit-bang so any S-mode fault is
+# visible.  Upload :opensbi_fw_cocoapuffs_hex.
+opensbi_firmware(
+    name = "opensbi_fw_cocoapuffs",
+    copts = ["-Iboards/noelv"],
+    fdt = ":board_dtb",
+    fw_src = "@opensbi//:firmware/fw_payload.S",
+    fw_type = "payload",
+    lib = "@opensbi//:generic",
+    linker_script = "@opensbi//:firmware/fw_payload.elf.ldS",
+    payload = "//third_party/fuchsia:cocoapuffs-hello",
+    text_start = "0x40000",
+    textual_hdrs = [
+        "fw_base.S",
+        "@opensbi//:firmware/fw_base.ldS",
+    ],
+)
+
+genrule(
+    name = "opensbi_fw_cocoapuffs_hex",
+    srcs = [":opensbi_fw_cocoapuffs"],
+    outs = ["opensbi_fw_cocoapuffs.hex"],
+    cmd = "$(execpath @riscv_none_elf//:objcopy) -O ihex " +
+          "$$(echo $(SRCS) | tr ' ' '\\n' | grep -E '[.]elf$$') $@",
+    tools = ["@riscv_none_elf//:objcopy"],
+)
+
+# ---------------------------------------------------------------------------
+# Rung 3: boot the full Zircon kernel.eng.zbi via the
+# linux boot-shim.  The shim reads /chosen { linux,initrd-start; linux,initrd-end }
+# from the DTB and boots that RAM range as a ZBI.  No U-Boot, so we patch the DTB
+# on the host and place the ZBI in RAM ourselves as a second ihex region.
+# ---------------------------------------------------------------------------
+
+# ZBI load address in DDR3.  The physical DDR3 is 128 MB and the 1 GB AHB
+# window aliases every 0x08000000 (JTAG-proven 2026-07-08) -- the old
+# 0x10000000 sat EXACTLY on the wrap and landed on physical 0x0, wiping the
+# firmware during the upload.  96 MB: inside real RAM, clear of OpenSBI+shim
+# (<0x280000), 30+ MB above it, reclaimed by the kernel after decompress.
+ZBI_ADDR = "0x06000000"
+
+# board_dtb + a /chosen node pointing linux,initrd-{start,end} at the ZBI in RAM.
+# initrd-end is start + actual ZBI size (computed from the file), as u64 cells.
+genrule(
+    name = "board_zircon_dtb",
+    srcs = [
+        ":board_dtb",
+        "//third_party/fuchsia:kernel-zbi",
+    ],
+    outs = ["board_zircon.dtb"],
+    cmd = ("set -e; " +
+           "dtb=$(execpath :board_dtb); " +
+           "zbi=$(execpath //third_party/fuchsia:kernel-zbi); " +
+           "start=$$((" + ZBI_ADDR + ")); " +
+           "end=$$((start + $$(stat -L -c%s $$zbi))); " +
+           "cp $$dtb $@; chmod +w $@; " +
+           # /chosen already exists in board.dts (stdout-path); add to it.
+           # 64-bit values as two u32 cells (hi, lo) so the shim reads u64 cleanly.
+           "fdtput -t x $@ /chosen linux,initrd-start " +
+           "$$(printf '0x%x 0x%x' $$((start >> 32)) $$((start & 0xffffffff))); " +
+           "fdtput -t x $@ /chosen linux,initrd-end " +
+           "$$(printf '0x%x 0x%x' $$((end >> 32)) $$((end & 0xffffffff)))"),
+)
+
+# SIM-ONLY variant of board_zircon_dtb for the FULL-boot xsim run: identical
+# except the declared RAM matches what the sim banks actually serve, so Zircon's
+# pmm never touches aliased/unmapped space during a multi-day run:
+#   memory@0        [0x0, 0x04000000)      = the 64 MiB lowmem bank (real array
+#                                            size; the HW DTB claims ~1 GB)
+#   memory@10000000 [0x10000000, +4 MiB)   = the zbi bank (a REAL separate BRAM
+#                                            in the tb -- unlike HW, where
+#                                            0x10000000 aliases physical 0x0;
+#                                            hence the sim keeps its own pinned
+#                                            address instead of ZBI_ADDR)
+# Same boot flow end to end -- only these RAM-size parameters differ from HW.
+SIM_ZBI_ADDR = "0x10000000"
+
+genrule(
+    name = "board_zircon_sim_dtb",
+    srcs = [
+        ":board_dtb",
+        "//third_party/fuchsia:kernel-zbi",
+    ],
+    outs = ["board_zircon_sim.dtb"],
+    cmd = ("set -e; " +
+           "dtb=$(execpath :board_dtb); " +
+           "zbi=$(execpath //third_party/fuchsia:kernel-zbi); " +
+           "start=$$((" + SIM_ZBI_ADDR + ")); " +
+           "end=$$((start + $$(stat -L -c%s $$zbi))); " +
+           "cp $$dtb $@; chmod +w $@; " +
+           "fdtput -t x $@ /memory@0 reg 0x0 0x0 0x0 0x4000000; " +
+           "fdtput -c $@ /memory@10000000; " +
+           "fdtput -t s $@ /memory@10000000 device_type memory; " +
+           "fdtput -t x $@ /memory@10000000 reg 0x0 0x10000000 0x0 0x400000; " +
+           # /chosen already exists in board.dts (stdout-path); add to it.
+           "fdtput -t x $@ /chosen linux,initrd-start " +
+           "$$(printf '0x%x 0x%x' $$((start >> 32)) $$((start & 0xffffffff))); " +
+           "fdtput -t x $@ /chosen linux,initrd-end " +
+           "$$(printf '0x%x 0x%x' $$((end >> 32)) $$((end & 0xffffffff)))"),
+)
+
+# opensbi_fw_zircon with the SIM memory map (board_zircon_sim_dtb) -- the
+# firmware for //boards/noelv/tool.vivado:zircon_full_boot.
+opensbi_firmware(
+    name = "opensbi_fw_zircon_sim",
+    copts = ["-Iboards/noelv"],
+    fdt = ":board_zircon_sim_dtb",
+    fw_src = "@opensbi//:firmware/fw_payload.S",
+    fw_type = "payload",
+    lib = "@opensbi//:generic",
+    linker_script = "@opensbi//:firmware/fw_payload.elf.ldS",
+    payload = "//third_party/fuchsia:riscv64-boot-shim",
+    text_start = "0x40000",
+    textual_hdrs = [
+        "fw_base.S",
+        "@opensbi//:firmware/fw_base.ldS",
+    ],
+)
+
+# Its dense 0x0-based .mem for the sim low-RAM bank (same recipe as
+# opensbi_fw_zircon_lowram_mem).
+genrule(
+    name = "opensbi_fw_zircon_sim_lowram_mem",
+    srcs = [":opensbi_fw_zircon_sim"],
+    outs = ["opensbi_fw_zircon_sim_lowram.mem"],
+    cmd = ("python3 -c \"import sys; sys.stdout.write('00 00 00 00\\n'*65536)\" > $@ && " +
+           "$(execpath //tools/bintomemh) < " +
+           "$$(echo $(SRCS) | tr ' ' '\\n' | grep -E '[.]bin$$') >> $@"),
+    tools = ["//tools/bintomemh"],
+)
+
+# OpenSBI fw_payload: shim payload + the ZBI-aware DTB.  Same core as :opensbi_fw.
+opensbi_firmware(
+    name = "opensbi_fw_zircon",
+    copts = ["-Iboards/noelv"],
+    fdt = ":board_zircon_dtb",
+    fw_src = "@opensbi//:firmware/fw_payload.S",
+    fw_type = "payload",
+    lib = "@opensbi//:generic",
+    linker_script = "@opensbi//:firmware/fw_payload.elf.ldS",
+    payload = "//third_party/fuchsia:riscv64-boot-shim",
+    # NOTE: tried relocating OpenSBI to 0x3D000000 (via //bin/noelv_reloc_trampoline)
+    # to dodge physboot's low-RAM kernel relocation -- but OpenSBI runs SILENTLY at
+    # 0x3D000000 (console/DTB init breaks at the relocated base) AND it didn't fix
+    # the reservation anyway. Keep OpenSBI at 0x40000 (boots + prints banner); the
+    # real fix is making physboot honor the reservation.
+    text_start = "0x40000",
+    textual_hdrs = [
+        "fw_base.S",
+        "@opensbi//:firmware/fw_base.ldS",
+    ],
+)
+
+# Same as opensbi_fw_zircon but with the DEBUG MEM_CONFIG-dump shim payload: it
+# builds the shim's MEM_CONFIG, snapshots it to 0x3E000000, and halts (no physboot,
+# no ZBI). Upload firmware-only (no ZBI) and JTAG-read 0x3E000000 to see whether the
+# shim emits OpenSBI's reservation as a hole. See //third_party/fuchsia:
+# riscv64-boot-shim-memcfgdump.
+opensbi_firmware(
+    name = "opensbi_fw_zircon_memcfgdump",
+    copts = ["-Iboards/noelv"],
+    fdt = ":board_zircon_dtb",
+    fw_src = "@opensbi//:firmware/fw_payload.S",
+    fw_type = "payload",
+    lib = "@opensbi//:generic",
+    linker_script = "@opensbi//:firmware/fw_payload.elf.ldS",
+    payload = "//third_party/fuchsia:riscv64-boot-shim-memcfgdump",
+    text_start = "0x40000",
+    textual_hdrs = [
+        "fw_base.S",
+        "@opensbi//:firmware/fw_base.ldS",
+    ],
+)
+
+# Firmware-only ihex of the MEM_CONFIG-dump build (no ZBI -- the shim halts after
+# the snapshot). Short upload; then JTAG-read 0x3E000000.
+genrule(
+    name = "opensbi_fw_zircon_memcfgdump_hex",
+    srcs = [":opensbi_fw_zircon_memcfgdump"],
+    outs = ["opensbi_fw_zircon_memcfgdump.hex"],
+    cmd = ("set -e; elf=$$(echo $(SRCS) | tr ' ' '\\n' | grep -E '[.]elf$$'); " +
+           "$(execpath @riscv_none_elf//:objcopy) -O ihex $$elf $@"),
+    tools = ["@riscv_none_elf//:objcopy"],
+)
+
+# FULL A/B/C image: debug-dump shim (now dumps A@0x3E000000 + B@0x3E001000 then
+# BOOTS) + the instrumented ZBI (physboot dumps C@0x3E002000). physboot runs, so the
+# ZBI is required. JTAG-read all three regions after boot.
+genrule(
+    name = "opensbi_fw_zircon_memcfgdump_full_hex",
+    srcs = [
+        ":opensbi_fw_zircon_memcfgdump",
+        ":kernel_zbi_hex",
+    ],
+    outs = ["opensbi_fw_zircon_memcfgdump_full.hex"],
+    cmd = ("set -e; " +
+           "elf=$$(echo $(SRCS) | tr ' ' '\\n' | grep -E '[.]elf$$'); " +
+           "zbihex=$$(echo $(SRCS) | tr ' ' '\\n' | grep -E 'kernel_zbi[.]hex$$'); " +
+           "$(execpath @riscv_none_elf//:objcopy) -O ihex $$elf $@.fw; " +
+           "grep -v '^:00000001FF' $@.fw > $@; " +
+           "cat $$zbihex >> $@"),
+    tools = ["@riscv_none_elf//:objcopy"],
+)
+
+# The ZBI as an ihex placed at ZBI_ADDR (its own type-04 extended-address region).
+genrule(
+    name = "kernel_zbi_hex",
+    srcs = ["//third_party/fuchsia:kernel-zbi"],
+    outs = ["kernel_zbi.hex"],
+    cmd = "$(execpath @riscv_none_elf//:objcopy) -I binary -O ihex " +
+          "--change-addresses=" + ZBI_ADDR + " $< $@",
+    tools = ["@riscv_none_elf//:objcopy"],
+)
+
+# Combined single ihex the SERV uploader streams in one pass: the firmware region
+# (OpenSBI+shim @0x40000) followed by the ZBI region (@ZBI_ADDR).  Drop the
+# firmware ihex EOF record (:00000001FF) so the ZBI region's records append.
+genrule(
+    name = "opensbi_fw_zircon_hex",
+    srcs = [
+        ":opensbi_fw_zircon",
+        ":kernel_zbi_hex",
+    ],
+    outs = ["opensbi_fw_zircon.hex"],
+    cmd = ("set -e; " +
+           "elf=$$(echo $(SRCS) | tr ' ' '\\n' | grep -E '[.]elf$$'); " +
+           "zbihex=$$(echo $(SRCS) | tr ' ' '\\n' | grep -E 'kernel_zbi[.]hex$$'); " +
+           "$(execpath @riscv_none_elf//:objcopy) -O ihex $$elf $@.fw; " +
+           "grep -v '^:00000001FF' $@.fw > $@; " +
+           "cat $$zbihex >> $@"),
+    tools = ["@riscv_none_elf//:objcopy"],
+)
+
+# Bootable image with OpenSBI relocated high: the 0x40000 trampoline (where the
+# boot stub jumps) + OpenSBI/shim @0x3D000000 + the ZBI @ZBI_ADDR.  One ihex the
+# SERV uploader streams in a single pass.  This is the fix for physboot
+# overwriting OpenSBI; no bitstream re-synth needed (the trampoline lives at the
+# boot stub's hardcoded 0x40000 target).
+genrule(
+    name = "opensbi_fw_zircon_reloc_hex",
+    srcs = [
+        "//bin/noelv_reloc_trampoline:hex",
+        ":opensbi_fw_zircon_hex",
+    ],
+    outs = ["opensbi_fw_zircon_reloc.hex"],
+    cmd = ("set -e; " +
+           "tramp=$$(echo $(SRCS) | tr ' ' '\\n' | grep -E 'noelv_reloc_trampoline.*[.]hex$$'); " +
+           "fw=$$(echo $(SRCS) | tr ' ' '\\n' | grep -E 'opensbi_fw_zircon[.]hex$$'); " +
+           # trampoline first (drop its EOF + start-address records), then the
+           # firmware+ZBI image (which keeps the final EOF).
+           "grep -vE '^:00000001FF|^:04000003' $$tramp > $@; " +
+           "cat $$fw >> $@"),
+)
+
+# Firmware-only ihex (OpenSBI + shim + board_zircon_dtb, NO ZBI) to isolate the
+# rung-3 OpenSBI-silence: if OpenSBI's banner prints with this short image, the 6MB
+# ZBI upload is the silence cause; if still silent, board_zircon_dtb's /chosen is.
+genrule(
+    name = "opensbi_fw_zircon_fwonly_hex",
+    srcs = [":opensbi_fw_zircon"],
+    outs = ["opensbi_fw_zircon_fwonly.hex"],
+    cmd = ("set -e; elf=$$(echo $(SRCS) | tr ' ' '\\n' | grep -E '[.]elf$$'); " +
+           "$(execpath @riscv_none_elf//:objcopy) -O ihex $$elf $@"),
+    tools = ["@riscv_none_elf//:objcopy"],
+)
+
+# Same content as opensbi_fw_zircon_hex but ZBI FIRST, firmware (OpenSBI+shim+DTB)
+# LAST -- so the firmware lands in DDR3 in the final ~7 min before boot instead of
+# ~24 min. Tests the hypothesis that the full rung-3 OpenSBI-silence is DDR3 decay
+# over the long upload (firmware-only prints; full is silent; only difference is the
+# 24-min upload of the 1.86MB ZBI written after the firmware). The single EOF stays
+# at the end (after the firmware), so the boot stub jumps to 0x40000 last-written.
+genrule(
+    name = "opensbi_fw_zircon_zbifirst_hex",
+    srcs = [
+        ":opensbi_fw_zircon",
+        ":kernel_zbi_hex",
+    ],
+    outs = ["opensbi_fw_zircon_zbifirst.hex"],
+    cmd = ("set -e; " +
+           "elf=$$(echo $(SRCS) | tr ' ' '\\n' | grep -E '[.]elf$$'); " +
+           "zbihex=$$(echo $(SRCS) | tr ' ' '\\n' | grep -E 'kernel_zbi[.]hex$$'); " +
+           "grep -v '^:00000001FF' $$zbihex > $@; " +
+           "$(execpath @riscv_none_elf//:objcopy) -O ihex $$elf $@.fw; " +
+           "cat $@.fw >> $@"),
+    tools = ["@riscv_none_elf//:objcopy"],
+)
+
+# Low-"DDR3"-RAM memory image for the OpenSBI bring-up simulation
+# (//boards/noelv/tool.vivado:opensbi_trace).  ahb_bram loads a memfile starting
+# at word 0, but OpenSBI's fw_payload is linked at 0x40000, so prepend 0x10000
+# (65536) zero words = 0x40000 bytes of padding, then the OpenSBI flat binary.
+# Format = one 32-bit word per line as 4 little-endian hex bytes (matches
+# //tools/bintomemh and ip/bridges/ahb_bram.vhdl). The low RAM in
+# tb_noelvsys_only must use reg_bit_count >= 21 + memsize >= 0x200000 so 0x40000
+# decodes without aliasing.
+genrule(
+    name = "opensbi_fw_hello_lowram_mem",
+    srcs = [":opensbi_fw_hello"],
+    outs = ["opensbi_fw_hello_lowram.mem"],
+    cmd = ("python3 -c \"import sys; sys.stdout.write('00 00 00 00\\n'*65536)\" > $@ && " +
+           "$(execpath //tools/bintomemh) < " +
+           "$$(echo $(SRCS) | tr ' ' '\\n' | grep -E '[.]bin$$') >> $@"),
+    tools = ["//tools/bintomemh"],
+)
+
+# Real-payload (Fuchsia boot-shim) variant of opensbi_fw_hello_lowram_mem, used by
+# //boards/noelv/tool.vivado:opensbi_trace_fuchsia to run OpenSBI + the actual
+# riscv64-boot-shim through the NOEL-V-only sim and trace where the shim faults.
+genrule(
+    name = "opensbi_fw_lowram_mem",
+    srcs = [":opensbi_fw"],
+    outs = ["opensbi_fw_lowram.mem"],
+    cmd = ("python3 -c \"import sys; sys.stdout.write('00 00 00 00\\n'*65536)\" > $@ && " +
+           "$(execpath //tools/bintomemh) < " +
+           "$$(echo $(SRCS) | tr ' ' '\\n' | grep -E '[.]bin$$') >> $@"),
+    tools = ["//tools/bintomemh"],
+)
+
+# rung-3 variant: OpenSBI + the real boot-shim + board_zircon_dtb (so OpenSBI's
+# fdt-fixup mmode_resv /reserved-memory is present and the shim's memory matcher
+# processes it) as a low-RAM memfile for the NOEL-V-only sim
+# (//boards/noelv/tool.vivado:opensbi_trace_zircon).  No ZBI needed to observe the
+# MEM_CONFIG -- it derives from the DTB memory/reserved-memory nodes.  Lets us debug
+# the reservation entirely in sim (full console + disas + memory), no hardware.
+genrule(
+    name = "opensbi_fw_zircon_lowram_mem",
+    srcs = [":opensbi_fw_zircon"],
+    outs = ["opensbi_fw_zircon_lowram.mem"],
+    cmd = ("python3 -c \"import sys; sys.stdout.write('00 00 00 00\\n'*65536)\" > $@ && " +
+           "$(execpath //tools/bintomemh) < " +
+           "$$(echo $(SRCS) | tr ' ' '\\n' | grep -E '[.]bin$$') >> $@"),
+    tools = ["//tools/bintomemh"],
+)
+
+# Disassembly of the OpenSBI firmware ELF (OpenSBI + embedded payload), for
+# inspecting the M-mode boot path -- e.g. where sbi_hart_init traps into
+# sbi_hart_hang.  Build and view:
+#   bazel build //boards/noelv:disasm
+#   less bazel-bin/boards/noelv/opensbi_fw.dis
+genrule(
+    name = "disasm",
+    srcs = [":opensbi_fw"],
+    outs = ["opensbi_fw.dis"],
+    cmd = "$(execpath @riscv_none_elf//:objdump) -d -S " +
+          "$$(echo $(SRCS) | tr ' ' '\\n' | grep -E '[.]elf$$') > $@",
+    tools = ["@riscv_none_elf//:objdump"],
+)
+
+exports_files([
+    "board.arch_rtl.vhdl",
+])
+
+# Compile the board devicetree source to a flattened device tree blob (.dtb)
+# using the hermetic dtc toolchain from rules_dtc.
+dtc_compile(
+    name = "board_dtb",
+    src = "board.dts",
+)
+
+# Compile-and-check: fails the build if board.dts stops compiling or the board
+# identity drifts from the HDLFactory Cocoapuffs naming.
+dts_test(
+    name = "board_dtb_test",
+    dtb = ":board_dtb",
+    properties = {
+        "/|model": "HDLFactory Cocoapuffs: FPGA Soft Core RISC-V Board",
+        "/|compatible": "hdlf,cocoapuffs",
+    },
+)
+
+filegroup(
+    name = "noelv_files",
+    # do not sort
+    srcs = [
+        "//ip/a200t:entity_vhdl",
+        "board.arch_rtl.vhdl",
+    ],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_lib_noelv",
+    ],
+)
+
+filegroup(
+    name = "tb_srcs",
+    # do not sort
+    srcs = [
+        "tb.vhdl",
+        "tb.arch_sim.vhdl",
+    ],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_lib_noelv_tb",
+    ],
+)
+
+filegroup(
+    name = "tb_noelvsys_ddr3_srcs",
+    # do not sort
+    srcs = [
+        "tb_noelvsys_ddr3.vhdl",
+    ],
+)
+
+filegroup(
+    name = "tb_noelvsys_only_srcs",
+    # do not sort
+    srcs = [
+        "tb_noelvsys_only.vhdl",
+    ],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_lib_noelv_tb_only",
+    ],
+)
+
+filegroup(
+    name = "vcd",
+    srcs = ["//boards/noelv/tool.vivado:sim"],
+    output_group = "vcd",
+)
+
+filegroup(
+    name = "vcd_only",
+    srcs = ["//boards/noelv/tool.vivado:sim_only"],
+    output_group = "vcd",
+)
+
+wave_view(
+    name = "view",
+    args = [
+        "--save=$(location full_wave.gtkw)",
+    ],
+    vhdl_run = ":vcd",
+    deps = [
+        "full_wave.gtkw",
+    ],
+)
+
+wave_view(
+    name = "view_only",
+    args = [
+        "--save=$(location full_wave.gtkw)",
+    ],
+    vhdl_run = ":vcd_only",
+    deps = [
+        "full_wave.gtkw",
+    ],
+)
+
+# VUnit-free NVC copy of the noelvsys tb (see tb_noelvsys_nvc.vhdl); consumed by
+# //boards/noelv/tool.nvc/boot.  Restored here: the file was dropped from main
+# together with the earlier NVC scaffolding.
+filegroup(
+    name = "tb_noelvsys_nvc_srcs",
+    srcs = ["tb_noelvsys_nvc.vhdl"],
+    visibility = ["//visibility:public"],
+)
+
+# The ZBI as a dense .mem for the sim's zbi bank (0x10000000-0x103FFFFF) -- keeps
+# the ZBI at its real address without a >256 MiB single array (xsim's 2**31-bit
+# cap).  Restored: main kept only the ihex variant.  Used by the zircon sim
+# targets in //boards/noelv/tool.vivado.
+genrule(
+    name = "kernel_zbi_mem",
+    srcs = ["//third_party/fuchsia:kernel-zbi"],
+    outs = ["kernel_zbi.mem"],
+    cmd = "$(execpath //tools/bintomemh) < $< > $@",
+    tools = ["//tools/bintomemh"],
+)

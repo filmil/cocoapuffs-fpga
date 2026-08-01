@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Core-level interrupt-delivery test: runs //bin/noelv_seiptest straight from the
+# boot BRAM (reset PC 0xC0000000, no OpenSBI) and exercises M-software (MSIP),
+# M-external and S-external (PLIC source 1) interrupts, writing a packed result
+# word per phase to low RAM (read back via the tb AHB monitor's "WR ... hwdata=").
+#
+# FINDING (2026-07-13): all three phases TIME OUT -- the disas trace shows the
+# enables are correct (msip written, mie/mstatus.MIE set, mtvec set) yet the PC
+# never enters the trap vector.  This NVC noelvsys core model does not take ANY
+# asynchronous interrupt, so it CANNOT validate the grplic->seip->mip.SEIP path;
+# it stands as a regression documenting that sim limitation.  (The grplic itself
+# is proven correct in isolation by //ip/plic:grplic_tb.)  disas=1 to re-trace.
+#
+# Separate package from //boards/noelv/tool.nvc/boot because the vhdl_test macro
+# names its internal vhdl_elaborate rule after the entity (tb_noelvsys_nvc), so
+# two tests on the same entity cannot share a package.
+load("@rules_nvc//build/nvc:rules.bzl", "vhdl_test")
+
+package(default_visibility = ["//visibility:public"])
+
+vhdl_test(
+    name = "seiptest_nvc",
+    srcs = ["//boards/noelv:tb_noelvsys_nvc_srcs"],
+    entity = "tb_noelvsys_nvc",
+    deps = [
+        "//:gaisler",
+        "//:grlib",
+        "//:techmap",
+        "//ip/bridges/tool.nvc:bridges",
+    ],
+    standard = "2008",
+    data = ["//bin/noelv_seiptest:memh"],
+    generics = {
+        "sim_duration_ns": "150000",
+        "noelv_memfile": "$(rootpath //bin/noelv_seiptest:memh)",
+        "noelv_memsize": "4096",
+        "disas": "0",
+    },
+    args = ["--ieee-warnings=off"],
+    tags = ["manual"],
+)
