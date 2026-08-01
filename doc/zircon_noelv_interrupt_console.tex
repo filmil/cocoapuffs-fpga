@@ -1,0 +1,481 @@
+\documentclass[conference,nofonttune]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+% Keep the IEEEtran layout but use Computer Modern instead of its Times/
+% Helvetica/Courier defaults (IEEEtran.cls forces ptm/phv/pcr). lmodern is
+% Computer Modern shipped as complete Type 1 fonts (with T1 encoding it also
+% covers glyphs like the section sign, avoiding Type 3 bitmap fallbacks); it
+% overrides the class font defaults. Math already uses Computer Modern. The
+% nofonttune class option above disables IEEEtran's Times-specific interword
+% tuning.
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage[hidelinks]{hyperref}
+\usepackage{textcomp}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=single,
+  framesep=3pt,
+  xleftmargin=3pt,
+  showstringspaces=false,
+}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\reg}[1]{\texttt{#1}}
+
+\begin{document}
+
+\title{Booting an Operating System on a RISC-V Soft Core:\\
+A Development History from RV32/SERV to an\\
+Interrupt-Driven Zircon on NOEL-V}
+
+\author{\IEEEauthorblockN{Filip Filmar}
+\IEEEauthorblockA{\textit{Independent} \\
+filmil@gmail.com}}
+
+\maketitle
+
+\begin{abstract}
+We chronicle the multi-month bring-up of a full operating-system stack on a
+RISC-V soft core on a single low-cost FPGA: from a bit-serial RV32 bootstrap
+loader, through core, UART, and DRAM bring-up on a 64-bit GRLIB NOEL-V core, to
+M-mode firmware (OpenSBI), a supervisor-mode boot ladder, and finally a
+fully interrupt-driven console for Google's Zircon microkernel. The value of the
+account is less any single fix than the \emph{pattern}: almost every failure
+traced not to the component under suspicion but to a non-standard choice in our
+own environment---an unconfigured scan input, a 32-bit core running 64-bit code,
+a byte-write strobe hardwired on, a device tree that under- or over-declared RAM,
+an interrupt-controller that was correct all along, and two RISC-V extensions
+(\emph{Smrnmi}, \emph{Sstc}) that were present in silicon but never enabled or
+advertised. We describe a three-vantage debugging methodology---isolated IP
+simulation, non-perturbing bare-metal probes, and a JTAG debug module that reads
+CSRs, arbitrary memory, and the kernel's own in-RAM log---that repeatedly
+separated real hardware faults from measurement artifacts and firmware
+omissions, and that made a low-cost, GPL-only toolchain sufficient to debug a
+proprietary core booting a production microkernel.
+\end{abstract}
+
+\begin{IEEEkeywords}
+RISC-V, NOEL-V, SERV, Zircon, Fuchsia, OpenSBI, PLIC, Smrnmi, Sstc, DDR3,
+FPGA, JTAG, bring-up, debugging.
+\end{IEEEkeywords}
+
+\section{Introduction}
+
+Soft-core RISC-V on an FPGA is uniquely inspectable: RTL, firmware, and kernel
+are all editable, and a debug module can read any register or memory word on the
+live system. That same openness means a single observable symptom---a core that
+fetches garbage, a store that ``never reaches the bus,'' a console that goes
+quiet---can originate in any layer, and the layers interact in ways that defeat
+single-layer reasoning. This paper is a development history of exactly that
+situation, assembled from the working notes of the bring-up.
+
+The target is Zircon, the microkernel under Google's Fuchsia, running on a
+NOEL-V core (from the GRLIB IP library) synthesized to a Xilinx Artix-7
+(xc7a200t) at 40\,MHz. Reaching a booting kernel required climbing a long ladder,
+and the recurring lesson---which the developer's notes phrase as ``why doesn't
+everyone hit this?''---is that \emph{every} obstacle was a consequence of a
+non-standard decision in the build, not a defect in the widely used component we
+first blamed. We present the arc in the order it was climbed:
+
+\begin{itemize}
+  \item \S\ref{sec:bootstrap}: the RV32/SERV bootstrap that loads and launches the 64-bit core;
+  \item \S\ref{sec:core}: core bring-up---an X-propagation that poisoned the whole pipeline in simulation, a core accidentally built 32-bit, and a UART that worked in simulation but not on silicon;
+  \item \S\ref{sec:mem}: the DRAM subsystem---a byte-write strobe hardwired on, and a 128\,MB aliasing bug that masqueraded as a memory-size limit;
+  \item \S\ref{sec:opensbi}: M-mode firmware---OpenSBI wedged by heap corruption and by load-reserved/store-conditional that this core does not hold on uncached DRAM;
+  \item \S\ref{sec:ladder}: the supervisor-mode boot ladder to a full Zircon boot, including a shim that trapped inside a bounds-checked C++ iterator and a data image placed on top of the boot stub;
+  \item \S\ref{sec:console}: the interrupt-driven console, whose five-layer root cause is the technical climax; and
+  \item \S\ref{sec:method}: the debugging methodology that made all of it tractable.
+\end{itemize}
+
+A timeline of the bring-up, drawn from the project's commit history, appears in
+Appendix~\ref{app:timeline}.
+
+\section{The Bootstrap Architecture}
+\label{sec:bootstrap}
+
+The board carries no boot ROM and no bootloader flash. Bring-up therefore began
+not with the NOEL-V but with \textbf{SERV}, a bit-serial RV32 core small enough
+to bootstrap from block RAM. Early boards (\code{rv32\_uart},
+\code{rv32\_ddr3}, \code{rv32\_ddr3exec}) established, incrementally, that the
+RV32 core could drive the UART, reach DDR3, and \emph{execute} from DDR3.
+
+That RV32 core then became the permanent first stage. In the production design
+the SERV core boots, runs an Intel-HEX \emph{uploader} over the serial port, and
+streams an arbitrary image into DRAM; it then writes a control register that
+switches the UART mux to the NOEL-V and releases the big core's reset. The
+NOEL-V begins executing the just-loaded image. This two-core hand-off is the
+substrate for everything that follows: every experiment in this paper is an
+image streamed to the SERV loader and launched on the NOEL-V. (An intermediate
+64-bit core, \emph{Muntjac}, was also explored; a simulation-timeout quirk made
+it a poor iteration vehicle, and effort concentrated on the NOEL-V.)
+
+\section{Bringing Up the Core}
+\label{sec:core}
+
+\subsection{An X that poisoned the pipeline}
+The first milestone was simply getting the NOEL-V to run a boot program and print
+``halt.'' It did not: in simulation the core mispredicted branches, speculatively
+fetched address~0, and \emph{dropped register writebacks}, so a
+\code{lui t0, 0xFF900} became \code{t0=0} and the UART store went to
+address~0 instead of \code{0xFF900000}. The cause was neither the fetch unit nor
+the store path but an \emph{unconfigured scan interface}: the core's internal AHB
+slave record was assembled field by field and never assigned
+\reg{testen}/\reg{testrst}/\reg{scanen} (and \reg{endian}). NOEL-V derives its
+scan-mux controls from those inputs, so leaving them \code{'U'} propagated X
+across flops and RAMs throughout the core. Driving them from the parent bus fixed
+it, and the core printed ``halt.'' A general lesson recorded at the time: in
+four-state simulation any undriven \code{std\_logic} on a control path becomes X
+and spreads far; scan/test inputs are the worst offenders. Diagnose with a VCD
+scan for signals stuck at \code{x}/\code{u} after reset.
+
+\subsection{A 64-bit core that was 32-bit}
+The next symptom looked like a memory fault: a store to DDR3 ``never reached the
+bus''; the bus-interface never asserted its request. Days of tracing the store
+path were wasted, because the store was a red herring. An instruction-disassembly
+trace showed \emph{32-bit register widths}: the build had compiled
+\code{noelv\_cfg\_32.vhd} (\code{NV\_XLEN=32}). An RV32 core running RV64 code
+\emph{deadlocked on the first 64-bit word operation} (\code{addw}), several
+instructions \emph{before} the store. The \code{cfg} generic (\S\ref{sec:core}
+sidebar) selects the microarchitecture family---\code{0x300} is the dual-issue
+``GP'' core intended for FPGA---but \emph{not} XLEN, which is the separate global
+\code{NV\_XLEN}. Switching to \code{noelv\_cfg\_64.vhd} produced 64-bit registers
+and a reachable, working store (AHB monitor: \code{WR 0x40000 hwdata=0xCAFEF00D},
+then a matching read-back). Two further self-inflicted wrinkles surfaced in the
+tiny hand-written boot assembly: \code{lui t0, 0xFF900} sign-extends to an
+invalid high address on RV64 (use \code{li}+\code{slli}), and \code{lw} of a
+value with bit~31 set sign-extends and fails a naive compare (use \code{lwu}).
+
+\subsection{A UART that passed simulation and failed on silicon}
+With the core running, the on-board serial output was a constant square wave.
+The core wrote the correct bytes to the UART data register (confirmed on
+debug LEDs capturing the AHB write stream), and the testbench UART decoded
+``halt.'' from the transmitter in simulation---yet the GRLIB \code{apbuart\_16550}
+transmitter garbled on the real FPGA. Rather than chase a vendored 16550, we
+switched to the Gaisler \code{apbuart} (same \reg{uarti}/\reg{uarto} interface, so
+no board rewiring), rewrote the boot code for its register map, and set the
+scaler for 115200 at the board clock. ``halt.'' then appeared at 115200\,8N1. A
+latent cross-domain bug was fixed in passing: a reset synchronizer for the
+NOEL-V's reset, released from the SERV clock domain.
+
+\section{The Memory Subsystem}
+\label{sec:mem}
+
+\subsection{A byte write that wrote every byte}
+Aligned 32- and 64-bit stores worked; single-byte stores (\code{sb}) to DDR3 did
+not---and that broke OpenSBI, whose \code{sbi\_memcpy}/\code{sbi\_memset} are
+byte-wise. The failure manifested far downstream, as \code{sbi\_domain\_init}
+returning \code{SBI\_EINVAL}: a byte-wise region-sort corrupted the root domain's
+memory-region table (two swapped entries came back zeroed), and the firmware hung.
+A raw bit-bang tracer patched into OpenSBI localized it, and \code{//bin/noelv\_bytetest}
+reproduced it in isolation. The bug was in the AHB-to-Wishbone bridge, which
+hardwired the Wishbone byte-select strobes to all-ones and never captured the AHB
+\reg{hsize}: because the NOEL-V replicates a sub-word datum across all lanes, an
+\code{sb} of \code{0xAA} wrote \code{0xAAAAAAAA}. Deriving the strobes from
+\reg{hsize} fixed it; a focused testbench (\code{//ip/bridges}) now regression-tests
+byte, halfword, word, and burst writes against a lane-honoring model.
+
+\subsection{A 1\,GB memory that looked like 128\,MB}
+The board appeared limited to 128\,MB of DRAM. The chip, the UberDDR3 controller,
+and the AHB decode were all 1\,GB; the cap was an adapter that dropped byte-address
+bits, aliasing the 1\,GB window every 128\,MB. A one-line address-slice fix
+restored the full gigabyte, verified by a caches-off march test
+(\code{//bin/noelv\_memtest1g}) that writes a distinct value to each 128\,MB bank
+and reads all back, and confirmed end to end by a Zircon boot reporting
+$\sim$1.0\,GB free after kernel init. This subsystem accreted a small suite of
+bare-metal tests---byte, data-section, read/write, atomic (AMO), and
+load-reserved/store-conditional probes---each of which paid for itself later.
+
+\section{M-Mode Firmware: OpenSBI}
+\label{sec:opensbi}
+
+Once memory was trustworthy, OpenSBI became the focus. Beyond the byte-write heap
+corruption above, two core-specific issues blocked the supervisor hand-off.
+First, this NOEL-V does not hold \code{lr.d}/\code{sc.d} reservations on uncached
+DDR3, so OpenSBI's single use of compare-and-swap (in
+\code{atomic\_cmpxchg}) spun forever; since the system is single-hart, a patch
+emulates CAS in an interrupt-safe critical section. Second, the core enters
+OpenSBI with \reg{mseccfg.MML} set, which the feature detector treats as fatal;
+the vendored entry code clears it. With a handful of additional patches (a
+drained-putc console so diagnostics are legible on hardware, trusted-FDT parsing
+to keep RTL simulation tractable, and trap/init tracers), OpenSBI boots fully:
+banner, domain configuration, and a hand-off to a supervisor-mode payload at a
+fixed address with the hart ID in \code{a0} and the (expanded) device tree in
+\code{a1}.
+
+\section{The Supervisor Boot Ladder}
+\label{sec:ladder}
+
+To keep failures localized, the Zircon bring-up was structured as a
+\emph{ladder} of increasingly complete bootable images (Table~\ref{tab:ladder}),
+each climbed only after the one below was green.
+
+\begin{table}[t]
+\caption{The supervisor-mode boot ladder.}
+\label{tab:ladder}
+\centering
+\footnotesize
+\begin{tabular}{@{}p{0.05\columnwidth}p{0.55\columnwidth}p{0.26\columnwidth}@{}}
+\toprule
+\# & What the image proves & Observable \\
+\midrule
+0 & OpenSBI loads and M-mode runs & OpenSBI banner \\
+1 & OpenSBI $\rightarrow$ S-mode hand-off; S-mode executes & ``hello'' payload \\
+2 & The Linux boot shim loads, runs in S-mode, parses the DTB & shim diagnostics \\
+3 & DTB \code{/chosen} initrd $\rightarrow$ shim finds the ZBI $\rightarrow$ physboot runs & physboot log \\
+4 & physboot relocates and starts the kernel $\rightarrow$ userboot & kernel/userboot log \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Rung~1 revealed a baud mismatch: a payload hardcoded a 50\,MHz scaler, giving
+$\sim$92.6\,kbaud on the 40\,MHz board---the banner was transmitted, just
+unreadable at a 115200 capture. Rung~2 was subtler. The shim loaded,
+self-relocated, and ran, then trapped on an \code{unimp} that
+\code{addr2line} placed inside \code{devicetree::Match}: a hardened-libc++
+\code{\_\_builtin\_trap} from a \emph{bounds-checked} \code{std::array} iterator,
+tripped because our minimal device tree lacked nodes the matchers expected
+(a PLIC node, a fuller CPU topology). Completing the device tree cleared it.
+Rungs~3--4 fought placement and memory-map issues: physboot placed the data ZBI
+at address~0, overwriting the boot stub, until the ZBI load address and the
+declared \code{/memory} range were reconciled; caches had to be disabled for the
+uncached boot path; a null frame-pointer guard was needed in the backtrace
+walker; and the vector extension had to be disabled (the core has no V). The
+payload lands at a fixed supervisor address, and the device tree---patched on the
+host, since there is no U-Boot---carries the ZBI's location in \code{/chosen}.
+
+The reward was a full boot: OpenSBI $\rightarrow$ shim $\rightarrow$ physboot
+$\rightarrow$ the kernel (complete init, memory-pressure subsystem, ``starting
+user space'') $\rightarrow$ \code{userboot}, terminating---correctly---at a
+deliberate \code{\_\_builtin\_trap} because the engineering ZBI carries no boot
+filesystem. This is the same terminus a reference emulator reaches for a
+filesystem-less image. An earlier build had one outstanding workaround---with
+address-space layout randomization enabled, \code{userboot} took an
+instruction-access fault at its randomized high base before running, so the
+configuration disabled ASLR---but that no longer reproduces: on the final build
+\code{userboot} self-relocates and runs to the same terminus with ASLR enabled,
+verified across two independent random placements. The fault had been collateral
+of a since-fixed problem (the interrupt-firmware and memory-map changes landed in
+between), and ASLR is now left on.
+
+\section{The Interrupt-Driven Console}
+\label{sec:console}
+
+Zircon's early output is polled, but its steady-state console is a debug-log
+\emph{dumper} thread that performs a \emph{blocking, interrupt-driven}
+transmit: it writes a byte and, if the FIFO is full, enables the UART transmit
+interrupt and blocks until that interrupt reports space. On our board that thread
+never made progress; only the polled fallback
+(\code{kernel.debug\_uart\_poll=true}) produced late-boot output. Resolving this
+``last mile'' took five independent fixes across four layers, and---as with every
+earlier stage---the component everyone suspects, here the platform interrupt
+controller (PLIC), was innocent.
+
+\subsection{Two software bugs on the delivery path}
+The device tree routed the UART interrupt with the modern
+\code{interrupts-extended = <\&plic0 1>} form, but the shim's chosen-node matcher
+read only the legacy \code{interrupts} property, resolving the console IRQ to~0
+so the kernel never unmasked PLIC source~1. Independently, the kernel PLIC
+driver's priority macro computed \code{base + 1 + irq}, writing source~$i$'s
+priority into source~$i{+}1$'s slot and leaving source~$i$ at priority~0---below
+threshold, hence enabled but never delivered. Both were fixed; neither restored
+the console.
+
+\subsection{Exonerating the PLIC}
+A JTAG snapshot then showed the PLIC fully and correctly configured for source~1
+in the supervisor context, yet \reg{sip.SEIP}${=}0$. Reading the claim register
+returned source~1, which we first read as ``the PLIC identifies the interrupt but
+fails to drive \reg{seip}''---a hardware bug. An \emph{isolated} simulation of the
+\code{grplic\_ahb} block, driven over an AHB bus-functional model exactly as the
+kernel drives it, refuted this: given the observed configuration and an asserted
+source, the block \emph{does} assert \reg{seip}, and the claim read \emph{clears}
+it. The ``\reg{seip}${=}0$ while pending'' reading had been a \emph{measurement
+artifact}---the claim read that produced the ``source~1'' datum had itself cleared
+the pending interrupt. The PLIC was correct throughout.
+
+\subsection{The core takes no interrupts}
+If delivery was fine, why no trap? A bare-metal probe armed the most trivial
+interrupt possible---a machine software interrupt---with \reg{mstatus.MIE}${=}1$
+and its enable set, verified the pending and enable bits over JTAG, and observed
+\emph{no trap}. The same held for timer and external interrupts. Reading the core
+RTL resolved it: this NOEL-V implements \emph{Smrnmi}, and the integer unit masks
+\emph{all} interrupts while \reg{mnstatus.NMIE}${=}0$---its reset value, which
+nothing in the boot chain ever changed. Setting it (\code{csrs 0x744, 8}) let the
+bare-metal probe take the full supervisor-external path and claim source~1.
+Smrnmi, not the PLIC, was the root cause of ``no interrupts.''
+
+\subsection{A wedge at the supervisor hand-off}
+Setting \reg{NMIE} in firmware produced a new failure: the kernel emitted nothing.
+With interrupts unmasked, any M-mode interrupt still armed in \reg{mie} fired the
+instant OpenSBI executed \code{mret} into supervisor mode---M-interrupts are
+always taken in a lower privilege---before the kernel installed its trap vector,
+wedging it at entry. Masking \reg{mie} immediately before the \code{mret}
+(Listing~\ref{lst:fw}) fixed it; the kernel's own supervisor interrupts are
+untouched, and OpenSBI re-arms M-interrupts on demand at its next ecall.
+
+\begin{lstlisting}[caption={The two coupled firmware changes.},label={lst:fw}]
+/* fw_base.S, _start_warm, after CSR_MIE is cleared: */
+    csrsi   0x744, 8          /* mnstatus.NMIE = 1 */
+
+/* sbi_hart.c, just before the mret to S-mode: */
+    csr_write(CSR_MIE, 0);    /* no M-interrupt at S-entry */
+\end{lstlisting}
+
+\subsection{A ``stall'' that was really a crawl}
+The kernel now booted and \emph{took} timer interrupts (JTAG: \reg{scause} showing
+the supervisor timer), yet appeared to hang in threading-level init. The
+debug-log ring, dumped over JTAG, told a different story: it was advancing, just
+extraordinarily slowly---timestamps put the boot at about nineteen minutes. The
+device tree declared \code{riscv,isa = "rv64imac"}, so Zircon could not tell the
+core implemented \emph{Sstc} and armed every scheduler-tick timer through an SBI
+ecall (a supervisor$\rightarrow$machine$\rightarrow$supervisor round trip) instead
+of writing \reg{stimecmp} directly. Advertising the extension
+(\code{riscv,isa = "rv64imac\_sstc"}) let the kernel use the direct compare
+register; the boot dropped to about seventeen seconds and, with the polled
+fallback removed, the \emph{entire} boot streamed over the interrupt-driven
+console to the expected terminus, past the init hook at which output had
+previously ceased.
+
+\subsection{The five-part fix}
+Table~\ref{tab:fixes} collects the changes. They span four layers; no subset
+yields a fast, fully interrupt-driven console.
+
+\begin{table}[t]
+\caption{The five-part fix for the interrupt console.}
+\label{tab:fixes}
+\centering
+\footnotesize
+\begin{tabular}{@{}p{0.05\columnwidth}p{0.55\columnwidth}p{0.26\columnwidth}@{}}
+\toprule
+\# & Fix & Layer \\
+\midrule
+1 & Write each source's \emph{own} PLIC priority register & Kernel PLIC driver \\
+2 & Resolve the console IRQ from \code{interrupts-extended} & Boot shim \\
+3 & Set \reg{mnstatus.NMIE}${=}1$ (unmask on this Smrnmi core) & M-mode firmware \\
+4 & Mask \reg{mie} before the S-mode \code{mret} & M-mode firmware \\
+5 & Advertise \code{sstc} (fast direct-\reg{stimecmp} timer) & Device tree \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Debugging Methodology}
+\label{sec:method}
+
+Three vantage points, used throughout the arc, made the difference; a
+disagreement among them localizes a fault.
+
+\paragraph{Isolated IP simulation}
+Simulating one block (the UART transmitter, the AHB bridge, the PLIC) with a bus
+functional model observes signals software cannot see and converts ``probably a
+hardware bug'' into a proof one way or the other. The PLIC exoneration is the
+sharpest example.
+
+\paragraph{Non-perturbing bare-metal probes}
+Small OS-free programs arm one interrupt or exercise one memory pattern at a time.
+The interrupt probes deliberately read pending state \emph{without} reading the
+claim register, precisely because an earlier measurement had been corrupted by
+that register's side effect.
+
+\paragraph{A GPL-only JTAG debug module}
+The proprietary core's professional debugger refuses to attach, so we drove the
+GRLIB JTAG bridge directly from \code{openocd} (GPL) as a plain AHB master:
+ground-truth reads of CSRs, of live peripheral registers (PLIC, CLINT), and---most
+valuable---of the kernel's in-RAM debug-log ring, which recovered boot progress
+when nothing reached the wire. Its limits were charted the hard way (unreliable
+single-step; stepping into unloaded RAM wedges the bus), and respected.
+
+\section{Lessons Learned}
+
+\paragraph{Suspect your own non-standard choices first}
+An unconfigured scan input, a 32-bit core running 64-bit code, a hardwired byte
+strobe, an aliasing address slice, an under-declared device tree---each broke a
+component that works for everyone else. The recurring question ``why doesn't
+everyone hit this?'' had the same answer every time: because everyone else's
+configuration is standard.
+
+\paragraph{Beware self-perturbing measurements}
+The ``\reg{seip}${=}0$ while pending'' reading was an artifact of reading the
+claim register. On hardware with side-effecting registers, non-invasive probes
+are worth the extra care.
+
+\paragraph{Extensions must be enabled \emph{and} advertised}
+\emph{Smrnmi} silently masked all interrupts until firmware enabled it;
+\emph{Sstc}, present in silicon but absent from \code{riscv,isa}, silently forced
+a $100{\times}$ slower timer path. Neither produced a diagnostic; both produced
+``it doesn't work'' or ``it hangs.''
+
+\paragraph{Distinguish ``stalled'' from ``slow''}
+A log absent from the wire is not necessarily a log that is not being written.
+Recovering the in-RAM ring over JTAG and reading its timestamps turned a presumed
+deadlock into a measured, then eliminated, performance problem.
+
+\paragraph{Climb a ladder}
+Structuring the bring-up as bootable rungs, each adding one layer, meant every new
+failure was localized to the layer just added---indispensable when a symptom can
+originate in any of five.
+
+\section{Conclusion}
+
+Booting a production microkernel on a RISC-V soft core, end to end on one FPGA,
+was a sequence of layer-crossing puzzles whose common thread was that the
+suspected component was almost never the culprit. The interrupt controller, the
+DRAM, the store path, and the UART core were each exonerated in turn; the real
+causes lay in configuration, in a bridge strobe, in firmware that failed to
+enable a masking extension, and in a device tree that failed to advertise a timer
+extension. A disciplined, multi-vantage methodology---isolating IP in simulation,
+probing bare metal without perturbing state, and reading ground truth (including
+the kernel's own log) over a GPL JTAG bridge---was what made a low-cost,
+fully open toolchain sufficient to find each cause among its several convincing
+decoys.
+
+\appendices
+
+\section{Timeline of the Bring-Up}
+\label{app:timeline}
+
+Table~\ref{tab:timeline} maps the bring-up to dates, drawn from the project's own
+commit history. The RV32/SERV foundation and the DDR3/UART bring-up span the
+first year; the NOEL-V, OpenSBI, and Zircon work is concentrated in a dense final
+month in which the boot ladder was climbed rung by rung to a full, and then
+interrupt-driven, boot.
+
+\begin{table}[ht]
+\caption{Timeline of the bring-up.}
+\label{tab:timeline}
+\centering
+\footnotesize
+\begin{tabular}{@{}p{0.16\columnwidth}p{0.76\columnwidth}@{}}
+\toprule
+Period & Milestone \\
+\midrule
+2024 Q3 & Project begins; SERV RV32 bit-serial core, UART, and DDR3 bring-up in simulation and on the FPGA \\
+2024--25 & RV32/SERV boards mature: Intel-HEX serial uploader, DDR3 access and execute-in-place \\
+2026-03 & Muntjac RV64 core evaluated as an intermediate \\
+2026-06-14 & NOEL-V core introduced \\
+2026-06-19 & NOEL-V runs: scan-input X-propagation fixed, RV32$\rightarrow$RV64 config, ``halt.'' on UART (16550$\rightarrow$Gaisler \code{apbuart}) \\
+2026-06-21 & Dual-issue NV-HP core builds; OpenSBI \code{fw\_payload} built \\
+2026-06-26 & Zircon boot ladder started; shim device-tree bounds-trap root-caused; JTAG debug module (\code{dsuen}) + \code{openocd}/ahbjtag \\
+2026-06-27 & OpenSBI boots fully; DDR3 byte-write bridge strobes fixed \\
+2026-06-28--30 & Faithful ZBI RTL simulation; a sim-only OpenSBI early-init timing hazard isolated \\
+2026-07-05 & Second-simulator (NVC) OpenSBI boot baseline \\
+2026-07-07 & DDR3 128\,MB aliasing fixed (adapter address slice); UART 40\,MHz clock \\
+2026-07-08 & L1 caches enabled in the boot stub (the Zircon LR/SC fix) \\
+2026-07-09 & Full Zircon boot to the expected no-bootfs terminus; PLIC node added \\
+2026-07-10 & Full 1\,GB DDR3 verified; entire boot streamed on the polled serial console \\
+2026-07-13 & Interrupt-driven console solved (Smrnmi \reg{NMIE} + \reg{mie}-quiesce + \code{sstc}) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\end{document}

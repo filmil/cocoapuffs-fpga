@@ -1,0 +1,46 @@
+load(
+    "@bazel_ebook//build:rules.bzl",
+    #"asymptote",
+    #"dot_png",
+    #"markdown_lib",
+    #"neato_png",
+    "drawtiming_png",
+    #"plantuml_png"
+)
+load("@rules_latex_host//latex:defs.bzl", "latex_document")
+
+# SPDX-License-Identifier: Apache-2.0
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "doc",
+    srcs = [
+        "bus_naming_style.md",
+        "debugging-ddr3-byte-write.md",
+        "noelv-lrsc-handoff.md",
+        "testing.md",
+        "using_unresolved_signals.md",
+        "using_xilinx_components.md",
+        ":clkgen_t",
+    ],
+)
+
+drawtiming_png(
+    name = "clkgen_t",
+    srcs = ["clkgen.t"],
+    args = [
+        "--cell-width",
+        "10",
+    ],
+)
+
+# IEEEtran write-up: the full RISC-V bring-up history on this board, from the
+# RV32/SERV bootstrap through NOEL-V core/UART/DDR3, OpenSBI, the Zircon boot
+# ladder, and the interrupt-driven console as the capstone.
+# Build:  bazel build //doc:zircon_noelv_interrupt_console
+# Output: bazel-bin/doc/zircon_noelv_interrupt_console.pdf
+# (needs the host TeX toolchain: bazel run @rules_latex_host//latex:install_tools)
+latex_document(
+    name = "zircon_noelv_interrupt_console",
+    main = "zircon_noelv_interrupt_console.tex",
+)
