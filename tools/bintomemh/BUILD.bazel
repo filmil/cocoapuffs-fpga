@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "bintomemh_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/filmil/a200t_examples/tools/bintomemh",
+    visibility = ["//visibility:private"],
+)
+
+go_binary(
+    name = "bintomemh",
+    embed = [":bintomemh_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "bintomemh_test",
+    srcs = ["main_test.go"],
+    embed = [":bintomemh_lib"],
+)

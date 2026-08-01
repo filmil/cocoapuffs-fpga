@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "vcd_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/filmil/a200t_examples/tools/vcd",
+    visibility = ["//visibility:private"],
+    deps = [
+        "@com_github_filmil_go_vcd_parser//dbq",
+    ],
+)
+
+go_binary(
+    name = "vcd",
+    embed = [":vcd_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "vcd_test",
+    srcs = ["main_test.go"],
+    embed = [":vcd_lib"],
+)

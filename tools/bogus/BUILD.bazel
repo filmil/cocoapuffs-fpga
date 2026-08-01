@@ -1,0 +1,9 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "bogus",
+    srcs = ["main.go"],
+    importpath = "github.com/filmil/a200t_examples/tools/bogus",
+    visibility = ["//visibility:public"],
+    deps = ["@com_github_davecgh_go_spew//spew"],
+)

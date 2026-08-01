@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "ahb_trace_decode_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/filmil/a200t_examples/tools/ahb_trace_decode",
+    visibility = ["//visibility:private"],
+)
+
+go_binary(
+    name = "ahb_trace_decode",
+    embed = [":ahb_trace_decode_lib"],
+    visibility = ["//visibility:public"],
+)
