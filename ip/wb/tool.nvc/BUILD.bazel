@@ -1,0 +1,185 @@
+# SPDX-License-Identifier: Apache-2.0
+# See LICENSE file.
+load(
+    "@rules_nvc//build/nvc:rules.bzl",
+    "vhdl_elaborate",
+    "vhdl_library",
+    "vhdl_run",
+    "vhdl_test",
+    "wave_view",
+)
+
+package(default_visibility = ["//visibility:public"])
+vhdl_library(
+    name = "wb",
+    standard = "2008",
+    srcs = ["//ip/wb"],
+    deps = [
+        "//ip/axi/tool.nvc:axi",
+        "//third_party/sdcard/tool.nvc:sdcard",
+    ],
+)
+
+vhdl_library(
+    name = "mmreg_decoder_test_lib",
+    standard = "2008",
+    srcs = [
+        "//ip/wb:mmreg_decoder_test",
+    ],
+    entities = [
+        "mmreg_decoder_test",
+    ],
+    deps = [
+        ":wb",
+        "//testing/tool.nvc:testing",
+    ],
+)
+
+vhdl_elaborate(
+    name = "mmreg_decoder_test",
+    library = ":mmreg_decoder_test_lib",
+    standard = "2008",
+)
+
+vhdl_run(
+    name = "mmreg_decoder_test_run",
+    entity = ":mmreg_decoder_test",
+    deps = [
+        ":mmreg_decoder_test_lib",
+    ],
+)
+
+wave_view(
+    name = "mmreg_decoder_test_view",
+    args = [
+        "--save=$(location mmreg_decoder_test_view.gtkw)",
+    ],
+    vhdl_run = ":mmreg_decoder_test_run",
+    deps = [
+        "mmreg_decoder_test_view.gtkw",
+    ],
+)
+
+vhdl_test(
+    name = "perinput_test",
+    standard = "2008",
+    srcs = ["//ip/wb:perinput.test.vhdl"],
+    entity = "perinput_test",
+    deps = [
+        "//ip/wb/tool.nvc:wb",
+        "//testing/tool.nvc:testing",
+        "@rules_vunit//tool.nvc:vunit_lib",
+    ],
+)
+
+vhdl_test(
+    name = "wb_mux_test",
+    standard = "2008",
+    srcs = ["//ip/wb:wb_mux.test.vhdl"],
+    entities = [
+        "tb",
+        "sim2_cfg",
+    ],
+    deps = [
+        "//ip/wb/tool.nvc:wb",
+        "//testing/tool.nvc:testing",
+        "@rules_osvvm//tool.nvc:osvvm",
+        "@rules_vunit//tool.nvc:vunit_lib",
+    ],
+)
+
+vhdl_test(
+    name = "bram_test",
+    standard = "2008",
+    srcs = ["//ip/wb:bram_test"],
+    entity = "tb_bram",
+    deps = [
+        "//ip/wb/tool.nvc:wb",
+        "//testing/tool.nvc:testing",
+        "@rules_vunit//tool.nvc:vunit_lib",
+    ],
+)
+
+vhdl_test(
+    name = "timer_test",
+    standard = "2008",
+    srcs = ["//ip/wb:timer_test"],
+    entity = "tb_timer",
+    deps = [
+        "//ip/wb/tool.nvc:wb",
+        "//testing/tool.nvc:testing",
+        "@rules_vunit//tool.nvc:vunit_lib",
+    ],
+)
+
+vhdl_test(
+    name = "cyc_demux_test",
+    standard = "2008",
+    srcs = ["//ip/wb:cyc_demux_test"],
+    entity = "cyc_demux_test",
+    deps = [
+        "//ip/wb/tool.nvc:wb",
+        "@rules_vunit//tool.nvc:vunit_lib",
+    ],
+)
+
+vhdl_test(
+    name = "percontrol_test",
+    standard = "2008",
+    srcs = ["//ip/wb:percontrol_test"],
+    entity = "percontrol_test",
+    deps = [
+        "//ip/wb/tool.nvc:wb",
+        "//testing/tool.nvc:testing",
+        "@rules_vunit//tool.nvc:vunit_lib",
+    ],
+)
+
+vhdl_test(
+    name = "rdt_mux_test",
+    standard = "2008",
+    srcs = ["//ip/wb:wb_test"],
+    entity = "rdt_mux_test",
+    deps = [
+        "//ip/wb/tool.nvc:wb",
+        "@rules_vunit//tool.nvc:vunit_lib",
+    ],
+)
+
+vhdl_test(
+    name = "wb2axi_simple_test",
+    standard = "2008",
+    srcs = ["//ip/wb:wb2axi_simple_vunit_test"],
+    entity = "wb2axi_simple_test",
+    deps = [
+        "//ip/wb/tool.nvc:wb",
+        "//ip/axi/tool.nvc:axi",
+        "//testing/tool.nvc:testing",
+        "@rules_vunit//tool.nvc:vunit_lib",
+    ],
+)
+
+vhdl_test(
+    name = "pic_test",
+    standard = "2008",
+    srcs = ["//ip/wb:pic_test"],
+    entity = "tb_pic",
+    deps = [
+        "//ip/wb/tool.nvc:wb",
+        "//testing/tool.nvc:testing",
+        "@rules_vunit//tool.nvc:vunit_lib",
+    ],
+)
+
+vhdl_test(
+    name = "sdcard_wblite_test",
+    standard = "2008",
+    srcs = ["//ip/wb:sdcard_wblite.test.vhdl"],
+    entity = "sdcard_wblite_tb",
+    deps = [
+        "//ip/wb/tool.nvc:wb",
+        "//testing/tool.nvc:testing",
+        "//third_party/sdcard/tool.nvc:sdcard",
+        "@rules_vunit//tool.nvc:vunit_lib",
+    ],
+)

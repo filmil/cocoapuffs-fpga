@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_ghdl//:rules.bzl", "ghdl_library", "ghdl_verilog")
+
+package(default_visibility = ["//visibility:public"])
+
+ghdl_library(
+    name = "tl",
+    srcs = [
+        "//ip/tl:tl_srcs",
+    ],
+    deps = [
+        "//ip/wb/tool.ghdl:wb",
+    ],
+)

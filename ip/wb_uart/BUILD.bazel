@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_nvc//:macros.bzl", "vhdl_testbench")
+load("@rules_nvc//build/nvc:rules.bzl", "vhdl_test", "wave_view")
+
+# See LICENSE file.
+package(default_visibility = ["//visibility:public"])
+
+vhdl_test(
+    name = "wb_uart_test",
+    standard = "2008",
+    srcs = [
+        "wb_uart.test.vhdl",
+    ],
+    args = [
+        "--dump-arrays",  # Include contents of arrays. May get slow.
+    ],
+    deps = [
+        "//ip/wb/tool.nvc:wb",
+        "//ip/wb_uart/nvc:wb_uart",
+        "//testing",
+    ],
+)
+
+#wave_view(
+#name = "wb_uart_test_view",
+#testonly = True,
+#vhdl_run = ":wb_uart_test",
+#)
+
+filegroup(
+    name = "wb_uart",
+    srcs = [
+        # Do not reorder (not a good idea, but sigh.
+        "wb_uart.ent.vhdl",
+        "wb_uart.arch.vhdl",
+    ],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_lib_wb_uart",
+    ],
+)
+
+filegroup(
+    name = "wb_uart_tb_vhdl",
+    srcs = [
+        "wb_uart.tb.vhdl",
+    ],
+)
+
+vhdl_testbench(
+    name = "tb",
+    srcs = [
+        "wb_uart_tb_vhdl",
+    ],
+    args = [
+        "--dump-arrays",  # Include contents of arrays. May get slow.
+    ],
+    entity = "wb_uart_tb",
+    deps = [
+        "//ip/wb/tool.nvc:wb",
+        "//ip/wb_uart/nvc:wb_uart",
+        "//testing/tool.nvc:testing",
+    ],
+)
+
+wave_view(
+    name = "view",
+    vhdl_run = ":tb",
+)

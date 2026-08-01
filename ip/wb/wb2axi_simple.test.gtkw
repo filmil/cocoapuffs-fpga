@@ -1,0 +1,96 @@
+[*]
+[*] GTKWave Analyzer v3.3.119 (w)1999-2024 BSI
+[*] Sun May 25 21:40:51 2025
+[*]
+[dumpfile] "/home/filmil/.cache/bazel/_bazel_filmil/fba57cb1498e5edac648620d88e186c0/execroot/_main/bazel-out/k8-fastbuild/bin/ip/wb/tool.vivado/wb2axi_simple_test_sim.vcd"
+[dumpfile_mtime] "Sun May 25 20:05:29 2025"
+[dumpfile_size] 5204
+[savefile] "/home/filmil/code/a200t_examples/ip/wb/wb2axi_simple_test.gtkw"
+[timestart] 0
+[size] 1706 939
+[pos] -1 -1
+*-15.636476 41700 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] tb.
+[treeopen] tb.uut0.
+[sst_width] 267
+[signals_width] 239
+[sst_expanded] 1
+[sst_vpaned_height] 306
+@28
+tb.uut0.clk
+tb.uut0.reset
+@200
+-
+@22
+tb.uut0.debug0.ar_addr[31:0]
+@28
+tb.uut0.debug0.ar_burst[1:0]
+@22
+tb.uut0.debug0.ar_id[3:0]
+tb.uut0.debug0.ar_len[7:0]
+@28
+tb.uut0.debug0.ar_valid
+tb.uut0.debug1.ar_ready
+@200
+-
+@22
+tb.uut0.debug0.aw_addr[31:0]
+@28
+tb.uut0.debug0.aw_burst[1:0]
+@22
+tb.uut0.debug0.aw_id[3:0]
+tb.uut0.debug0.aw_len[7:0]
+@28
+tb.uut0.debug0.aw_valid
+tb.uut0.debug1.aw_ready
+@200
+-
+@22
+tb.uut0.debug0.w_data[31:0]
+@28
+tb.uut0.debug0.w_last
+@22
+tb.uut0.debug0.w_strb[3:0]
+@28
+tb.uut0.debug0.w_valid
+tb.uut0.debug1.w_ready
+@200
+-
+-
+-
+@22
+tb.uut0.debug1.b_id[3:0]
+@28
+tb.uut0.debug1.b_resp[1:0]
+tb.uut0.debug1.b_valid
+tb.uut0.debug0.b_ready
+@200
+-
+@22
+tb.uut0.debug1.r_data[31:0]
+tb.uut0.debug1.r_id[3:0]
+@28
+tb.uut0.debug1.r_last
+tb.uut0.debug1.r_resp[1:0]
+tb.uut0.debug0.r_ready
+tb.uut0.debug1.r_valid
+@200
+-
+@22
+tb.uut0.debug3.adr[31:0]
+@29
+tb.debug_wb_per.ack
+@22
+tb.uut0.debug2.rdt[31:0]
+tb.uut0.debug3.dat[31:0]
+@28
+tb.uut0.debug3.cyc
+tb.uut0.debug3.we
+@22
+tb.uut0.debug3.sel[3:0]
+@28
+tb.clk
+@22
+tb.debug_wb_per.rdt[31:0]
+[pattern_trace] 1
+[pattern_trace] 0

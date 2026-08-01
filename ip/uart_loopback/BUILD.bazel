@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: Apache-2.0
+load(
+    "@rules_vivado//build/vivado:rules.bzl",
+    "vivado_library",
+    "vivado_place_and_route",
+    "vivado_program_device",
+    "vivado_project",
+    "vivado_synthesis",
+)
+
+vivado_project(
+    name = "prj",
+    srcs = ["board_top.vhdl"],
+    part = "xc7a200tfbg484-2",
+    top_level = "board_top",
+    xdcs = ["uart.xdc"],
+    deps = ["//third_party/uart:third_party_uart"],
+)
+
+vivado_synthesis(
+    name = "synth",
+    project = ":prj",
+)
+
+vivado_place_and_route(
+    name = "pnr",
+    synthesis = ":synth",
+)
+
+vivado_program_device(
+    name = "prog",
+    prog_daemon = "//third_party/xilinx/prog_daemon:run",
+    prog_daemon_args = [
+        "--daemon-binary=./third_party/xilinx/prog_daemon/prog_daemon_/prog_daemon",
+        "--",  # Following args are args for the prog_daemon.
+        "--daemon-binary=./third_party/xilinx/hw_server/upload.bash",
+        "--",  # Following args are for the upload.bash script.
+        "--upload-shar=./third_party/xilinx/hw_server/hw_server.shar",
+        "--prog-server=your-prog-server.example",
+    ],
+    deps = [
+        ":pnr",
+    ],
+)

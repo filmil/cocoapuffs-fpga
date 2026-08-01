@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: Apache-2.0
+load(
+    "@rules_vivado//build/vivado:rules.bzl",
+    "vivado_library",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "tl2wb.test.vhdl",
+    "tl_uh2wblite.test.vhdl",
+    "tl_c2wblite.test.vhdl",
+    "tl_ethernet.test.vhdl",
+])
+
+filegroup(
+    name = "tl_srcs",
+    # do not sort
+    srcs = [
+        "tl_pkg.pkg.vhdl",
+        "tl2wb.ent.vhdl",
+        "tl_uh2wblite.ent.vhdl",
+        "tl_c2wblite.ent.vhdl",
+        "tl_ethernet.ent.vhdl",
+        "tl_ethernet.arch.vhdl",
+    ],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_lib_tl",
+    ],
+)

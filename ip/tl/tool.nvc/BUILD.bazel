@@ -1,0 +1,81 @@
+# SPDX-License-Identifier: Apache-2.0
+load(
+    "@rules_nvc//build/nvc:rules.bzl",
+    "vhdl_elaborate",
+    "vhdl_library",
+    "vhdl_run",
+    "vhdl_test",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+vhdl_library(
+    name = "tl",
+    standard = "2008",
+    srcs = [
+        "//ip/tl:tl_srcs",
+    ],
+    deps = [
+        "//ip/wb/tool.nvc:wb",
+    ],
+)
+
+vhdl_test(
+    name = "tl2wb_test",
+    standard = "2008",
+    srcs = [
+        "//ip/tl:tl2wb.test.vhdl",
+    ],
+    entity = "tl2wb_tb",
+    deps = [
+        "//testing/tool.nvc:testing",
+        ":tl",
+        "//ip/wb/tool.nvc:wb",
+        "@rules_vunit//tool.nvc:vunit_lib",
+    ],
+)
+
+vhdl_test(
+    name = "tl_uh2wblite_test",
+    standard = "2008",
+    srcs = [
+        "//ip/tl:tl_uh2wblite.test.vhdl",
+    ],
+    entity = "tl_uh2wblite_tb",
+    deps = [
+        ":tl",
+        "//ip/wb/tool.nvc:wb",
+        "//testing/tool.nvc:testing",
+        "@rules_vunit//tool.nvc:vunit_lib",
+    ],
+)
+
+vhdl_test(
+    name = "tl_c2wblite_test",
+    standard = "2008",
+    srcs = [
+        "//ip/tl:tl_c2wblite.test.vhdl",
+    ],
+    entity = "tl_c2wblite_tb",
+    deps = [
+        ":tl",
+        "//ip/wb/tool.nvc:wb",
+        "//testing/tool.nvc:testing",
+        "@rules_vunit//tool.nvc:vunit_lib",
+    ],
+)
+
+vhdl_test(
+    name = "tl_ethernet_test",
+    standard = "2008",
+    srcs = [
+        "//ip/tl:tl_ethernet.test.vhdl",
+    ],
+    entity = "tl_ethernet_test",
+    deps = [
+        "//testing/tool.nvc:testing",
+        "//third_party/ethernet/tool.nvc:ethernet",
+        "@rules_vunit//tool.nvc:vunit_lib",
+        ":tl",
+    ],
+)

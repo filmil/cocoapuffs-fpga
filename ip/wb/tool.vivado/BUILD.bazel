@@ -1,0 +1,50 @@
+load("@rules_nvc//build/nvc:rules.bzl", "wave_view")
+
+# SPDX-License-Identifier: Apache-2.0
+# See LICENSE file.
+load(
+    "@rules_vivado//build/vivado:rules.bzl",
+    "vivado_library",
+    "vivado_simulation",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+vivado_library(
+    name = "wb",
+    standard = "2008",
+    srcs = ["//ip/wb"],
+    deps = [
+        "//ip/axi",
+        "//third_party/sdcard/tool.vivado:sdcard",
+    ],
+)
+
+vivado_library(
+    name = "wb2axi_simple_test",
+    standard = "2008",
+    srcs = ["//ip/wb:wb2axi_simple_test"],
+    deps = [
+        ":wb",
+        "//ip/axi",
+        "//testing/tool.vivado:testing",
+    ],
+)
+
+vivado_simulation(
+    name = "wb2axi_simple_test_sim",
+    library = ":wb2axi_simple_test",
+    top = "tb",
+)
+
+filegroup(
+    name = "wb2axi_simple_test_vcd",
+    srcs = [":wb2axi_simple_test_sim"],
+    output_group = "vcd",
+)
+
+wave_view(
+    name = "wb2axi_simple_test_view",
+    save_file = "//ip/wb:wb2axi_simple_test_gtkw",
+    vhdl_run = ":wb2axi_simple_test_vcd",
+)

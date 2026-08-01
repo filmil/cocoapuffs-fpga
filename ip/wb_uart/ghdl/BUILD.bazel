@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_ghdl//:rules.bzl", "ghdl_library", "ghdl_verilog")
+
+package(default_visibility = ["//visibility:public"])
+
+ghdl_library(
+    name = "wb_uart",
+    srcs = [
+        "//ip/wb_uart",
+    ],
+    deps = [
+        "//ip/wb/tool.ghdl:wb",
+        "//third_party/uart/ghdl:lib_uart",
+    ],
+)
+
+ghdl_verilog(
+    name = "wb_uart_v",
+    generics = {
+        "baud_rate": "112500",
+        "clock_frequency": "200_000_000",
+        # I couldn't find a way to specify `x"40000010"`
+        "uart_address": "".join([
+            "0100",
+            "0000",
+            "0000",
+            "0000",
+            "0000",
+            "0000",
+            "0001",
+            "0000",
+        ]),
+    },
+    lib = ":wb_uart",
+    unit = "wb_uart",
+)

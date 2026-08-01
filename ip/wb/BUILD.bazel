@@ -1,0 +1,114 @@
+# SPDX-License-Identifier: Apache-2.0
+
+package(default_visibility = ["//visibility:public"])
+
+# gazelle:sorted_srcs false
+filegroup(
+    name = "wb",
+    # do not sort
+    srcs = [
+        "types.pkg.vhdl",
+        "signals.pkg.vhdl",
+        "rdt_mux.vhdl",
+        "host.pkg.vhdl",
+        "per.pkg.vhdl",
+        "debug_host.vhdl",
+        "debug_per.vhdl",
+        "wb2axi_simple.ent.vhdl",
+        "cyc_demux.vhdl",
+        "mmreg_decoder.vhdl",
+        "timer.vhdl",
+        "pic.vhdl",
+        "percontrol.vhdl",
+        "perinput.vhdl",
+        "wb_mux.vhdl",
+        "bram.vhdl",
+        "sdcard_wblite.vhdl",
+    ],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_lib_wb",
+    ],
+)
+
+filegroup(
+    name = "wb_test",
+    srcs = [
+        "rdt_mux.test.vhdl",
+    ],
+)
+
+filegroup(
+    name = "wb2axi_simple_test",
+    srcs = [
+        "wb2axi_simple.tb.vhdl",
+    ],
+)
+
+filegroup(
+    name = "wb2axi_simple_vunit_test",
+    srcs = [
+        "wb2axi_simple.test.vhdl",
+    ],
+)
+
+filegroup(
+    name = "wb2axi_simple_test_gtkw",
+    srcs = [
+        "wb2axi_simple.test.gtkw",
+    ],
+)
+
+filegroup(
+    name = "mmreg_decoder_test",
+    srcs = [
+        "mmreg_decoder.test.vhdl",
+    ],
+)
+
+filegroup(
+    name = "perinput_test",
+    srcs = [
+        "perinput.test.vhdl",
+    ],
+)
+
+filegroup(
+    name = "bram_test",
+    srcs = [
+        "bram.test.vhdl",
+    ],
+)
+
+filegroup(
+    name = "timer_test",
+    srcs = [
+        "timer.test.vhdl",
+    ],
+)
+
+filegroup(
+    name = "cyc_demux_test",
+    srcs = [
+        "cyc_demux.test.vhdl",
+    ],
+)
+
+filegroup(
+    name = "percontrol_test",
+    srcs = [
+        "percontrol.test.vhdl",
+    ],
+)
+
+filegroup(
+    name = "pic_test",
+    srcs = [
+        "pic.test.vhdl",
+    ],
+)
+
+exports_files([
+    "wb_mux.test.vhdl",
+    "sdcard_wblite.test.vhdl",
+])

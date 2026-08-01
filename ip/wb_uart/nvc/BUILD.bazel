@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: Apache-2.0
+# See LICENSE file.
+load(
+    "@rules_nvc//build/nvc:rules.bzl",
+    "vhdl_library",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+vhdl_library(
+    name = "wb_uart",
+    standard = "2008",
+    srcs = ["//ip/wb_uart"],
+    deps = [
+        "//ip/wb/tool.nvc:wb",
+        "//third_party/uart/nvc:lib_uart",
+    ],
+)
+
+vhdl_library(
+    name = "wb_uart_tb",
+    standard = "2008",
+    srcs = ["//ip/wb_uart"],
+    deps = [
+        ":wb_uart",
+        "//ip/wb/tool.nvc:wb",
+        "//testing/tool.nvc:testing",
+        "//third_party/uart/nvc:lib_uart",
+    ],
+)

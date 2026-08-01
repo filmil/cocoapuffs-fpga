@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_ghdl//:rules.bzl", "ghdl_library", "ghdl_verilog")
+load(
+    "@rules_vivado//build/vivado:rules.bzl",
+    "vivado_generics",
+    "vivado_library",
+    "vivado_place_and_route",
+    "vivado_program_device",
+    "vivado_project",
+    "vivado_synthesis",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+ghdl_library(
+    name = "wb",
+    srcs = [
+        "//ip/wb",
+    ],
+    deps = [
+        "//ip/axi/tool.ghdl:axi",
+        "//third_party/sdcard/tool.ghdl:sdcard",
+        "//third_party/uart/ghdl:lib_uart",
+    ],
+)
+
+#vivado_library(
+#name = "wb_test",
+#srcs = ["//ip/wb:wb_test"],
+#deps = [
+#":wb",
+#"//ip/axi/tool.ghdl:axi",
+#],
+#)

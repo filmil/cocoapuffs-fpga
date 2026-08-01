@@ -1,0 +1,41 @@
+[*]
+[*] GTKWave Analyzer v3.3.119 (w)1999-2024 BSI
+[*] Sat Jul 12 18:11:13 2025
+[*]
+[dumpfile] "/home/filmil/.cache/bazel/_bazel_filmil/fba57cb1498e5edac648620d88e186c0/execroot/_main/bazel-out/k8-fastbuild/bin/ip/wb/tool.nvc/mmreg_decoder_test_run.vcd"
+[dumpfile_mtime] "Sat Jul 12 18:09:57 2025"
+[dumpfile_size] 5951
+[savefile] "/home/filmil/code/a200t_examples/ip/wb/tool.nvc/mmreg_decoder_test_run.gtkw"
+[timestart] 0
+[size] 1706 979
+[pos] -1 -1
+*-23.037374 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] mmreg_decoder_test.
+[sst_width] 267
+[signals_width] 110
+[sst_expanded] 1
+[sst_vpaned_height] 323
+@28
+mmreg_decoder_test.clk
+@420
+mmreg_decoder_test.indexo
+@22
+mmreg_decoder_test.regi[31:0]
+mmreg_decoder_test.rego[31:0]
+@28
+mmreg_decoder_test.reset
+mmreg_decoder_test.write
+@22
+mmreg_decoder_test.wbi.adr[31:0]
+@28
+mmreg_decoder_test.wbi.cyc
+@22
+mmreg_decoder_test.wbi.dat[31:0]
+mmreg_decoder_test.wbi.sel[3:0]
+@28
+mmreg_decoder_test.wbi.we
+mmreg_decoder_test.wbo.ack
+@22
+mmreg_decoder_test.wbo.rdt[31:0]
+[pattern_trace] 1
+[pattern_trace] 0
