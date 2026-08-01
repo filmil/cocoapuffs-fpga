@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+# Patch applied to the @rules_nvc module via single_version_override in MODULE.bazel.
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "module_dot_bazel_version.patch",
+    "support_test_tags.patch",
+])

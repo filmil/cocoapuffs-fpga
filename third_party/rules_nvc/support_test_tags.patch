@@ -1,0 +1,22 @@
+Forward the macro-level 'tags' attribute to the generated vhdl_test target,
+so callers can tag tests (e.g. 'manual' to exclude slow tests from wildcard
+runs).  The macro previously dropped tags entirely.
+
+--- a/internal/vhdl_test.bzl
++++ b/internal/vhdl_test.bzl
+@@ -156,7 +156,7 @@
+ )
+ 
+ def vhdl_test(name, srcs, deps,
+-    standard=_VHDL_STANDARD_DEFAULT, args=[], entity=None, entities=[]):
++    standard=_VHDL_STANDARD_DEFAULT, args=[], entity=None, entities=[], tags=[]):
+     """
+     Defines a VHDL test.
+ 
+@@ -198,5 +198,6 @@
+             entity = ":{}".format(e),
+             args = args,
+             standard = standard,
++            tags = tags,
+         )
+ 

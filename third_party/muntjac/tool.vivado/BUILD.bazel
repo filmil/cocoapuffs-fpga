@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+load(
+    "@rules_vivado//build/vivado:rules.bzl",
+    "vivado_library",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+vivado_library(
+    name = "muntjac",
+    srcs = [
+        "//third_party/muntjac:srcs",
+    ],
+    hdrs = [
+        "//third_party/muntjac:hdrs",
+    ],
+    includes = [
+        "//external/rules_fusesoc++fusesoc_cores+fusesoc_cores/build/lowrisc_muntjac_core_0.1/src/lowrisc_prim_assert_0.1/rtl",
+        "//external/rules_fusesoc++fusesoc_cores+fusesoc_cores/build/lowrisc_muntjac_core_0.1/src/lowrisc_prim_util_memload_0/rtl",
+        "//external/rules_fusesoc++fusesoc_cores+fusesoc_cores/build/lowrisc_muntjac_core_0.1/src/lowrisc_tl_common_0.1/rtl",
+    ],
+)

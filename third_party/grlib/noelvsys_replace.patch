@@ -1,0 +1,12 @@
+--- a/lib/gaisler/noelv/subsys/noelvsys.vhd
++++ b/lib/gaisler/noelv/subsys/noelvsys.vhd
+@@ -516,5 +516,5 @@
+-    cpuapbo(0) <= replace_pindex(apbo_uart, 0);
+-    cpuapbo(1) <= replace_pindex(apbo_gptime,  1);
+-    cpuapbo(2) <= replace_pindex(apbo_etrace, 2);
++    cpuapbo(0) <= apbo_uart;
++    cpuapbo(1) <= apbo_gptime;
++    cpuapbo(2) <= apbo_etrace;
+     genrotapb: for i in 3 to nextapb + 2 generate
+-      cpuapbo(i) <= replace_pindex(apbo(i - 3), i);
++      cpuapbo(i) <= apbo(i - 3);

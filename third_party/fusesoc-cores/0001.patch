@@ -1,0 +1,25 @@
+From db282597ae9394167d6c7cf23390a0f1e8b63ee4 Mon Sep 17 00:00:00 2001
+From: Filip Filmar <filmil@gmail.com>
+Date: Sun, 15 Mar 2026 23:06:32 +0000
+Subject: [PATCH] fix: patch uart to have a top level file.
+
+Otherwise it's not doing anything
+---
+ uart16550/uart16550-1.5.5-r1.core | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/fusesoc_libraries/fusesoc-cores/uart16550/uart16550-1.5.5-r1.core b/fusesoc_libraries/fusesoc-cores/uart16550/uart16550-1.5.5-r1.core
+index f860eb1..e3c3733 100644
+--- a/fusesoc_libraries/fusesoc-cores/uart16550/uart16550-1.5.5-r1.core
++++ b/fusesoc_libraries/fusesoc-cores/uart16550/uart16550-1.5.5-r1.core
+@@ -20,6 +20,7 @@ filesets:
+ targets:
+   default:
+     filesets: [rtl]
++    toplevel: uart_top
+ 
+ provider:
+   name    : github
+--
+2.34.1
+

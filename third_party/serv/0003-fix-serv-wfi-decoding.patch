@@ -1,0 +1,5 @@
+--- a/rtl/serv_decode.v
++++ b/rtl/serv_decode.v
+@@ -145,1 +145,1 @@
+-   wire co_e_op = opcode[4] & opcode[2] & !op21 & !(|funct3);
++   wire co_e_op = opcode[4] & opcode[2] & !op21 & !op22 & !(|funct3);

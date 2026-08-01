@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: Apache-2.0
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "sdcard.test.vhdl",
+])
+
+filegroup(
+    name = "srcs",
+    # do not sort
+    srcs = [
+        "sdcard_pkg.vhdl",
+        "sdcard.vhdl",
+    ],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_lib_sdcard_lib",
+    ],
+)

@@ -1,0 +1,5 @@
+--- a/vunit/vhdl/verification_components/src/stream_slave_pkg.vhd
++++ b/vunit/vhdl/verification_components/src/stream_slave_pkg.vhd
+@@ -61,1 +61,1 @@
+-  constant stream_pop_msg : msg_type_t := new_msg_type("stream pop");
++  constant stream_pop_msg : msg_type_t := (p_code => 1);

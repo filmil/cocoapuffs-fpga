@@ -1,0 +1,109 @@
+DEBUG (NOEL-V/HW): dump regions at BUILD time in sbi_domain_init (q=memregs[0]
+.order w=[0].base e=[1].order t=[2].order) AND at sanitize check 7 (p=ptr O/J/K
+= [0]/[1]/[2].order). Compares before/after sanitize's sort. Remove when done.
+
+--- a/lib/sbi/sbi_domain.c
++++ b/lib/sbi/sbi_domain.c
+@@ -281,6 +281,22 @@
+ 	sbi_memset(reg, 0x0, sizeof(*reg));
+ }
+ 
++static void dbg_bb(char tag, long val)
++{
++	volatile unsigned int *u = (volatile unsigned int *)0xFF900000UL;
++	int i, nib; char c;
++	u[3] = 42; u[2] = 3;
++	while (!(u[1] & 2)) ; u[0] = tag;
++	while (!(u[1] & 2)) ; u[0] = '=';
++	for (i = 28; i >= 0; i -= 4) {
++		nib = (val >> i) & 0xf;
++		c = (nib < 10) ? ('0' + nib) : ('a' + nib - 10);
++		while (!(u[1] & 2)) ; u[0] = c;
++	}
++	while (!(u[1] & 2)) ; u[0] = '\r';
++	while (!(u[1] & 2)) ; u[0] = '\n';
++}
++
+ static int sanitize_domain(struct sbi_domain *dom)
+ {
+ 	u32 i, j, count;
+@@ -291,6 +307,7 @@
+ 	if (!dom->possible_harts) {
+ 		sbi_printf("%s: %s possible HART mask is NULL\n",
+ 			   __func__, dom->name);
++		dbg_bb('1', (long)dom);
+ 		return SBI_EINVAL;
+ 	}
+ 	sbi_hartmask_for_each_hartindex(i, dom->possible_harts) {
+@@ -298,6 +315,7 @@
+ 			sbi_printf("%s: %s possible HART mask has invalid "
+ 				   "hart %d\n", __func__,
+ 				   dom->name, sbi_hartindex_to_hartid(i));
++		dbg_bb('2', (long)dom);
+ 			return SBI_EINVAL;
+ 		}
+ 	}
+@@ -306,6 +324,7 @@
+ 	if (!dom->regions) {
+ 		sbi_printf("%s: %s regions is NULL\n",
+ 			   __func__, dom->name);
++		dbg_bb('3', (long)dom);
+ 		return SBI_EINVAL;
+ 	}
+ 	sbi_domain_for_each_memregion(dom, reg) {
+@@ -314,6 +333,7 @@
+ 				   "order=%lu flags=0x%lx\n", __func__,
+ 				   dom->name, reg->base, reg->order,
+ 				   reg->flags);
++		dbg_bb('4', (long)dom);
+ 			return SBI_EINVAL;
+ 		}
+ 	}
+@@ -327,6 +347,7 @@
+ 	if (!dom->fw_region_inited) {
+ 		sbi_printf("%s: %s does not have firmware region\n",
+ 			   __func__, dom->name);
++		dbg_bb('5', (long)dom);
+ 		return SBI_EINVAL;
+ 	}
+ 
+@@ -384,6 +405,7 @@
+ 	    dom->next_mode != PRV_U) {
+ 		sbi_printf("%s: %s invalid next booting stage mode 0x%lx\n",
+ 			   __func__, dom->name, dom->next_mode);
++		dbg_bb('6', (long)dom);
+ 		return SBI_EINVAL;
+ 	}
+ 
+@@ -392,6 +414,7 @@
+ 				   SBI_DOMAIN_EXECUTE)) {
+ 		sbi_printf("%s: %s next booting stage address 0x%lx can't "
+ 			   "execute\n", __func__, dom->name, dom->next_addr);
++		{ struct sbi_domain_memregion *r = dom->regions; dbg_bb('p', (long)r); if (r) { dbg_bb('O', r[0].order); dbg_bb('J', r[1].order); dbg_bb('K', r[2].order); } }
+ 		return SBI_EINVAL;
+ 	}
+ 
+@@ -544,6 +567,7 @@
+ 
+ 	/* Sanitize discovered domain */
+ 	rc = sanitize_domain(dom);
++	dbg_bb('z', rc);
+ 	if (rc) {
+ 		sbi_printf("%s: sanity checks failed for"
+ 			   " %s (error %d)\n", __func__,
+@@ -782,6 +806,7 @@
+ 
+ 	/* Initialize domain context support */
+ 	rc = sbi_domain_context_init();
++	dbg_bb('X', rc);
+ 	if (rc)
+ 		goto fail_free_domain_hart_ptr_offset;
+ 
+@@ -830,6 +855,7 @@
+ 
+ 	/* Root domain memory region end */
+ 	root_memregs[root_memregs_count].order = 0;
++	dbg_bb('q', root_memregs[0].order); dbg_bb('w', root_memregs[0].base); dbg_bb('e', root_memregs[1].order); dbg_bb('t', root_memregs[2].order);
+ 
+ 	/* Root domain boot HART id is same as coldboot HART id */
+ 	root.boot_hartid = cold_hartid;

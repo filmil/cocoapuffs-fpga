@@ -1,0 +1,11 @@
+constraint_value(
+    name = "imac",
+    constraint_setting = "//third_party/riscv32_toolchain/constraints:march",
+    visibility = ["//visibility:public"],
+)
+
+constraint_value(
+    name = "i",
+    constraint_setting = "//third_party/riscv32_toolchain/constraints:march",
+    visibility = ["//visibility:public"],
+)

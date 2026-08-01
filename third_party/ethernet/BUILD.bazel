@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "srcs",
+    # do not sort
+    srcs = [
+        "ethernet_phy.vhdl",
+    ],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_lib_ethernet",
+    ],
+)

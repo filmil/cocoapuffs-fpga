@@ -1,0 +1,5 @@
+--- a/vunit/vhdl/data_types/src/integer_vector_ptr_pkg.vhd
++++ b/vunit/vhdl/data_types/src/integer_vector_ptr_pkg.vhd
+@@ -15,1 +15,1 @@
+-use work.external_integer_vector_pkg.all;
++-- unused import

@@ -1,0 +1,38 @@
+From 801567b79a19485f2f7cb0ac771224ff68e07059 Mon Sep 17 00:00:00 2001
+From: Filip Filmar <filmil@gmail.com>
+Date: Thu, 9 Oct 2025 06:38:28 +0000
+Subject: [PATCH] patch: don't use llvm rule
+
+See: https://github.com/bazel-contrib/toolchains_llvm/issues/569
+---
+ MODULE.bazel | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/MODULE.bazel b/MODULE.bazel
+index ebf0472..93a5d89 100644
+--- a/MODULE.bazel
++++ b/MODULE.bazel
+@@ -16,13 +16,13 @@ bazel_dep(name = "elfutils", version = "0.1.1")
+ 
+ 
+ bazel_dep(name = "toolchains_llvm", version = "1.5.0", dev_dependency = True)
+-llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
+-llvm.toolchain(
+-    name = "llvm_toolchain",
+-    llvm_version = "20.1.4",
+-)
+-use_repo(llvm, "llvm_toolchain")
+-register_toolchains("@llvm_toolchain//:all")
++#llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
++#llvm.toolchain(
++    #name = "llvm_toolchain",
++    #llvm_version = "20.1.4",
++#)
++#use_repo(llvm, "llvm_toolchain")
++#register_toolchains("@llvm_toolchain//:all")
+ 
+ 
+ http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+-- 
+2.34.1
+

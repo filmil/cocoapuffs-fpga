@@ -1,0 +1,15 @@
+--- a/vunit/vhdl/verification_components/src/bus_master_pkg-body.vhd
++++ b/vunit/vhdl/verification_components/src/bus_master_pkg-body.vhd
+@@ -7,1 +7,11 @@
+-package body bus_master_pkg is
++package body bus_master_pkg is
++  impure function init_bus_master_pkg return boolean is
++    variable dummy1, dummy2, dummy3, dummy4 : msg_type_t;
++  begin
++    dummy1 := new_msg_type("write bus");
++    dummy2 := new_msg_type("read bus");
++    dummy3 := new_msg_type("burst write bus");
++    dummy4 := new_msg_type("burst read bus");
++    return true;
++  end function;
++  constant bus_master_pkg_dummy : boolean := init_bus_master_pkg;

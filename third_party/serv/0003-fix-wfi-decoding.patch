@@ -1,0 +1,11 @@
+--- a/rtl/serv_decode.v
++++ b/rtl/serv_decode.v
+@@ -142,7 +142,7 @@
+ 
+    //Matches system opcodes except CSR accesses (funct3 == 0)
+    //and mret (!op21)
+-   wire co_e_op = opcode[4] & opcode[2] & !op21 & !(|funct3);
++   wire co_e_op = opcode[4] & opcode[2] & !op21 & !op22 & !(|funct3);
+ 
+    wire co_csr_mstatus_en = csr_op & !op26 & !op22 & !op20;
+    wire co_csr_mie_en     = csr_op & !op26 &  op22 & !op20;

@@ -1,0 +1,61 @@
+load("@rules_shar//:macros.bzl", "shar_binary")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("@rules_vivado//build/vivado:rules.bzl", "vivado_extract")
+
+package(default_visibility = ["//visibility:public"])
+
+# The hw_server binary and the Digilent cable-driver libraries are part of the
+# Vivado installation. Rather than checking these (large, proprietary) files
+# into git, we extract them on demand from the locally provided
+# xilinx-vivado:<version> Docker image. The output paths mirror the historical
+# layout (bin/hw_server and lib/*) that hw_server.sh expects.
+vivado_extract(
+    name = "vivado_files",
+    files = {
+        "bin/hw_server": "bin/unwrapped/lnx64.o/hw_server",
+        "lib/libXil_lmgr11.so": "lib/lnx64.o/libXil_lmgr11.so",
+        "lib/libdabs.so.2": "lib/lnx64.o/libdabs.so.2",
+        "lib/libdftd2xx.so.1": "lib/lnx64.o/libdftd2xx.so.1",
+        "lib/libdjtg.so.2": "lib/lnx64.o/libdjtg.so.2",
+        "lib/libdmgr.so.2": "lib/lnx64.o/libdmgr.so.2",
+        "lib/libdpcomm.so.2": "lib/lnx64.o/libdpcomm.so.2",
+        "lib/libxftdi.so": "lib/lnx64.o/libxftdi.so",
+    },
+)
+
+shar_binary(
+    name = "hw_server",
+    srcs = [
+        "hw_server.sh",
+    ],
+    data = [
+        ":vivado_files",
+        "@bazel_tools//tools/bash/runfiles",
+        "@gotopt2//:bin",
+    ],
+    deps = [
+        "//third_party/shlib",
+        "@fshlib//:log",
+    ],
+)
+
+sh_binary(
+    name = "upload",
+    srcs = [
+        "upload.bash",
+    ],
+    args = [
+        "--upload-shar=$(location :hw_server_shar)",
+        "--prog-daemon-binary=$(location //third_party/xilinx/prog_daemon)",
+    ],
+    data = [
+        ":hw_server_shar",
+        "//third_party/xilinx/prog_daemon",
+        "@bazel_tools//tools/bash/runfiles",
+        "@gotopt2//:bin",
+    ],
+    deps = [
+        "@fshlib//:log",
+    ],
+)

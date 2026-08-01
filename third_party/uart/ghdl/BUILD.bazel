@@ -1,0 +1,31 @@
+load("@rules_ghdl//:rules.bzl", "ghdl_library", "ghdl_verilog")
+
+package(default_visibility = ["//visibility:public"])
+
+######################################################################
+# Synthesis via Verilog / for mixed designs
+
+ghdl_library(
+    name = "lib_uart",
+    srcs = ["@uart_vhdl//:uart"],
+    deps = [
+        "//testing/unisim/ghdl:unisim",
+    ],
+)
+
+ghdl_verilog(
+    name = "lib_uart_ghdl_v",
+    generics = {
+        "baud": "115200",
+        "clock_frequency": "200000000",  # 200MHz
+    },
+    lib = ":lib_uart",
+    unit = "top",
+)
+
+ghdl_library(
+    name = "third_party_uart_with_vendor",
+    srcs = ["@uart_vhdl//:uart"],
+    library_name = "lib_uart",
+    vendor = ["unisim"],
+)

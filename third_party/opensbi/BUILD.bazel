@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+# Patch applied to the @opensbi module via single_version_override in MODULE.bazel.
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "fdt_assume_perfect.patch",
+    "skip_unused_early_scans.patch",
+    "gaisler_drained_putc.patch",
+    "coldboot_tracer.patch",
+    "domain_tracer.patch",
+    "single_hart_cmpxchg.patch",
+    "uart_m_region.patch",
+    "quiesce_mie_handoff.patch",
+])

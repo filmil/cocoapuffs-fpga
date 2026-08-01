@@ -1,0 +1,38 @@
+HW (NOEL-V): expose the APBUART MMIO region to BOTH M-mode and S/U-mode in the
+OpenSBI root domain. After sbi_hart_pmp_configure() the catch-all root Region03
+is M:()/S:(), so without this M-mode loses UART access (OpenSBI trap dumps are
+dropped) and an S-mode OS faults on the UART -- both via its SBI console (ecall,
+handled in M) and, crucially, via a direct console driver: Zircon physboot writes
+the APBUART at 0xff900000 itself and would fault on its very first putchar.
+Mirror what aclint_mtimer does for the CLINT.
+
+--- a/lib/utils/serial/gaisler-uart.c
++++ b/lib/utils/serial/gaisler-uart.c
+@@ -9,6 +9,7 @@
+ 
+ #include <sbi/riscv_io.h>
+ #include <sbi/sbi_console.h>
++#include <sbi/sbi_domain.h>
+ #include <sbi_utils/serial/gaisler-uart.h>
+ 
+ /* clang-format off */
+@@ -82,5 +83,19 @@
+ 
+ 	sbi_console_set_device(&gaisler_console);
+ 
++	/*
++	 * HW (NOEL-V): register the APBUART as an M- and S/U-accessible MMIO region in the
++	 * root domain. Without it, after sbi_hart_pmp_configure() the catch-all
++	 * Region03 is M:() and M-mode loses UART access -- so OpenSBI's trap dumps
++	 * are silently dropped and a real S-mode OS's SBI console (ecall) faults.
++	 * Mirrors what aclint_mtimer does for the CLINT.
++	 */
++	sbi_domain_root_add_memrange(base, 0x1000, 0x1000,
++				     SBI_DOMAIN_MEMREGION_MMIO |
++				     SBI_DOMAIN_MEMREGION_M_READABLE |
++				     SBI_DOMAIN_MEMREGION_M_WRITABLE |
++				     SBI_DOMAIN_MEMREGION_SU_READABLE |
++				     SBI_DOMAIN_MEMREGION_SU_WRITABLE);
++
+ 	return 0;
+ }

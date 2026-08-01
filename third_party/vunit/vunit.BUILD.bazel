@@ -1,0 +1,196 @@
+# SPDX-License-Identifier: Apache-2.0
+package(default_visibility = ["//visibility:public"])
+
+# Generic export for all VHDL source files in the VUnit repository.
+exports_files(glob(["vunit/vhdl/**/*.vhd"]))
+
+# Note: Complex Vivado builds for VUnit are handled via stubs in
+# //testing/vunit due to xelab elaboration issues with the full library.
+
+filegroup(
+    name = "string_ops_srcs",
+    srcs = ["vunit/vhdl/string_ops/src/string_ops.vhd"],
+)
+
+filegroup(
+    name = "path_srcs",
+    srcs = ["vunit/vhdl/path/src/path.vhd"],
+)
+
+filegroup(
+    name = "data_types_srcs_pkg",
+    srcs = [
+        "vunit/vhdl/data_types/src/data_types_private_pkg.vhd",
+        "vunit/vhdl/data_types/src/integer_array_pkg.vhd",
+        "vunit/vhdl/data_types/src/queue_pkg.vhd",
+        "vunit/vhdl/data_types/src/string_ptr_pool_pkg.vhd",
+        "vunit/vhdl/data_types/src/byte_vector_ptr_pkg.vhd",
+        "vunit/vhdl/data_types/src/dict_pkg.vhd",
+        "vunit/vhdl/data_types/src/dict_pkg-2008p.vhd",
+    ],
+)
+
+filegroup(
+    name = "data_types_context",
+    srcs = ["vunit/vhdl/data_types/src/data_types_context.vhd"],
+)
+
+filegroup(
+    name = "data_types_srcs",
+    srcs = [
+        "vunit/vhdl/data_types/src/string_ptr_pkg-body-2002p.vhd",
+        "vunit/vhdl/data_types/src/integer_array_pkg-body.vhd",
+        "vunit/vhdl/data_types/src/dict_pkg-body.vhd",
+        "vunit/vhdl/data_types/src/queue_pkg-body.vhd",
+        "vunit/vhdl/data_types/src/queue_pkg-2008p.vhd",
+        "vunit/vhdl/data_types/src/queue_pool_pkg.vhd",
+        "vunit/vhdl/data_types/src/event_common_pkg.vhd",
+        "vunit/vhdl/data_types/src/event_private_pkg.vhd",
+        "vunit/vhdl/data_types/src/event_pkg.vhd",
+    ],
+)
+
+filegroup(
+    name = "logging_src_pkg",
+    srcs = [
+        "vunit/vhdl/logging/src/ansi_pkg.vhd",
+        "vunit/vhdl/logging/src/log_levels_pkg.vhd",
+        "vunit/vhdl/logging/src/common_log_pkg.vhd",
+        "vunit/vhdl/logging/src/file_pkg.vhd",
+        "vunit/vhdl/logging/src/log_handler_pkg.vhd",
+        "vunit/vhdl/logging/src/print_pkg.vhd",
+        "vunit/vhdl/logging/src/location_pkg.vhd",
+        "vunit/vhdl/logging/src/logger_pkg.vhd",
+    ],
+)
+
+filegroup(
+    name = "logging_src_pkg_body",
+    srcs = [
+        "vunit/vhdl/logging/src/common_log_pkg-body.vhd",
+        "vunit/vhdl/logging/src/location_pkg-body-2008m.vhd",
+        "vunit/vhdl/logging/src/log_handler_pkg-body.vhd",
+        "vunit/vhdl/logging/src/log_levels_pkg-body.vhd",
+        "vunit/vhdl/logging/src/logger_pkg-body.vhd",
+        "vunit/vhdl/logging/src/print_pkg-body.vhd",
+    ],
+)
+
+filegroup(
+    name = "check_srcs",
+    srcs = [
+        "vunit/vhdl/check/src/checker_pkg.vhd",
+        "vunit/vhdl/check/src/checker_pkg-body.vhd",
+        "vunit/vhdl/check/src/check_api.vhd",
+        "vunit/vhdl/check/src/check_api-2008p.vhd",
+        "vunit/vhdl/check/src/check.vhd",
+        "vunit/vhdl/check/src/check-2008p.vhd",
+    ],
+)
+
+filegroup(
+    name = "run_srcs",
+    srcs = [
+        "vunit/vhdl/run/src/run_types.vhd",
+        "vunit/vhdl/run/src/runner_pkg.vhd",
+        "vunit/vhdl/run/src/run_api.vhd",
+        "vunit/vhdl/run/src/run.vhd",
+    ],
+)
+
+filegroup(
+    name = "dictionary_srcs",
+    srcs = ["vunit/vhdl/dictionary/src/dictionary.vhd"],
+)
+
+filegroup(
+    name = "random_srcs",
+    srcs = ["vunit/vhdl/random/src/random_pkg.vhd"],
+)
+
+filegroup(
+    name = "core_srcs",
+    srcs = [
+        "vunit/vhdl/data_types/src/types.vhd",
+        "vunit/vhdl/data_types/src/codec_builder.vhd",
+        "vunit/vhdl/data_types/src/codec_builder-2008p.vhd",
+        "vunit/vhdl/data_types/src/codec.vhd",
+        "vunit/vhdl/data_types/src/codec-2008p.vhd",
+        "vunit/vhdl/data_types/src/integer_vector_ptr_pkg.vhd",
+        "vunit/vhdl/data_types/src/integer_vector_ptr_pkg-body-2002p.vhd",
+        "vunit/vhdl/data_types/src/integer_vector_ptr_pool_pkg.vhd",
+        "vunit/vhdl/data_types/src/string_ptr_pkg.vhd",
+        "vunit/vhdl/core/src/stop_pkg.vhd",
+        "vunit/vhdl/core/src/stop_body_2008p.vhd",
+        "vunit/vhdl/core/src/core_pkg.vhd",
+        "vunit/vhdl/data_types/src/id_pkg.vhd",
+    ],
+)
+
+filegroup(
+    name = "vunit_context",
+    srcs = ["vunit/vhdl/vunit_context.vhd"],
+)
+
+filegroup(
+    name = "com_srcs",
+    srcs = [
+        "vunit/vhdl/com/src/com_types.vhd",
+        "vunit/vhdl/com/src/com_support.vhd",
+        "vunit/vhdl/com/src/com_messenger.vhd",
+        "vunit/vhdl/com/src/com_common.vhd",
+        "vunit/vhdl/com/src/com_debug_codec_builder.vhd",
+        "vunit/vhdl/com/src/com_string.vhd",
+        "vunit/vhdl/com/src/com_api.vhd",
+        "vunit/vhdl/com/src/com.vhd",
+        "vunit/vhdl/com/src/com_deprecated.vhd",
+        "vunit/vhdl/com/src/com_context.vhd",
+    ],
+)
+
+filegroup(
+    name = "verification_components_srcs",
+    srcs = [
+        "vunit/vhdl/verification_components/src/vc_pkg.vhd",
+        "vunit/vhdl/verification_components/src/sync_pkg.vhd",
+        "vunit/vhdl/verification_components/src/sync_pkg-body.vhd",
+        "vunit/vhdl/verification_components/src/memory_pkg.vhd",
+        "vunit/vhdl/verification_components/src/memory_pkg-body.vhd",
+        "vunit/vhdl/verification_components/src/memory_utils_pkg.vhd",
+        "vunit/vhdl/verification_components/src/bus_master_pkg.vhd",
+        "vunit/vhdl/verification_components/src/bus_master_pkg-body.vhd",
+        "vunit/vhdl/verification_components/src/stream_master_pkg.vhd",
+        "vunit/vhdl/verification_components/src/stream_master_pkg-body.vhd",
+        "vunit/vhdl/verification_components/src/stream_slave_pkg.vhd",
+        "vunit/vhdl/verification_components/src/stream_slave_pkg-body.vhd",
+        "vunit/vhdl/verification_components/src/uart_pkg.vhd",
+        "vunit/vhdl/verification_components/src/uart_master.vhd",
+        "vunit/vhdl/verification_components/src/uart_slave.vhd",
+        "vunit/vhdl/verification_components/src/ram_master.vhd",
+        "vunit/vhdl/verification_components/src/bus2memory.vhd",
+        "vunit/vhdl/verification_components/src/signal_checker_pkg.vhd",
+        "vunit/vhdl/verification_components/src/std_logic_checker.vhd",
+        "@@//third_party/vunit:vc_context.vhd",
+
+    ],
+)
+
+filegroup(
+    name = "srcs",
+    srcs = [
+        ":string_ops_srcs",
+        ":core_srcs",
+        ":path_srcs",
+        ":data_types_srcs_pkg",
+        ":logging_src_pkg",
+        ":logging_src_pkg_body",
+        ":data_types_srcs",
+        ":data_types_context",
+        ":dictionary_srcs",
+        ":check_srcs",
+        ":run_srcs",
+        ":vunit_context",
+        ":com_srcs",
+        ":verification_components_srcs",
+    ],
+)

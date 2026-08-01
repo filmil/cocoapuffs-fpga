@@ -1,0 +1,47 @@
+load("@rules_nvc//build/nvc:rules.bzl", "wave_view")
+load(
+    "@rules_vivado//build/vivado:rules.bzl",
+    "vivado_generics",
+    "vivado_library",
+    "vivado_place_and_route",
+    "vivado_program_device",
+    "vivado_project",
+    "vivado_simulation",
+    "vivado_synthesis",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "ddr3_top_srcs",
+    srcs = [
+        "ddr3_top.v",
+    ],
+)
+
+filegroup(
+    name = "micron_ddr3_model",
+    srcs = [
+        "ddr3.sv",
+    ],
+)
+
+filegroup(
+    name = "testbench_4096m",
+    srcs = [
+        "4096Mb_ddr3_parameters.vh",
+    ],
+)
+
+vivado_library(
+    name = "uberddr3",
+    standard = "2008",
+    srcs = [
+        "@uberddr3//:rtl_ddr3",
+        "@uberddr3//:rtl_ddr3_top",
+    ],
+    deps = [
+        "//third_party/xilinx:glbl",
+        "//third_party/xilinx:unisims",
+    ],
+)

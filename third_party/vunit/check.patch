@@ -1,0 +1,14 @@
+--- a/vunit/vhdl/check/src/check.vhd
++++ b/vunit/vhdl/check/src/check.vhd
+@@ -9,1 +9,10 @@
+-package body check_pkg is
++package body check_pkg is
++  impure function init_check_pkg return boolean is
++    variable dummy_checker : checker_t;
++    variable dummy_logger : logger_t;
++  begin
++    dummy_checker := new_checker("check");
++    dummy_logger := get_logger(dummy_checker);
++    return true;
++  end function;
++  constant check_pkg_dummy : boolean := init_check_pkg;

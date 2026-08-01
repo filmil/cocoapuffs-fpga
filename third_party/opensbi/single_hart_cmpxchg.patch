@@ -1,0 +1,33 @@
+HW WORKAROUND (NOEL-V a200t): emulate atomic_cmpxchg without LR/SC.
+This core does not hold lr.d/sc.d reservations on uncached DDR3, so the
+GCC __sync CAS (the firmware's only lr/sc) spins forever and wedges the
+S-mode handoff. Single-hart system -> interrupt-safe read/compare/write.
+Proper fix is in hardware (cacheable DDR3 or an AHB exclusive monitor).
+
+--- a/lib/sbi/riscv_atomic.c
++++ b/lib/sbi/riscv_atomic.c
+@@ -85,7 +85,23 @@
+ 
+ long atomic_cmpxchg(atomic_t *atom, long oldval, long newval)
+ {
+-	return __sync_val_compare_and_swap(&atom->counter, oldval, newval);
++	/*
++	 * HW WORKAROUND (NOEL-V a200t): this core does not maintain LR/SC
++	 * reservations on uncached DDR3, so __sync_val_compare_and_swap
++	 * (lr.d/sc.d) never succeeds and spins forever -- it is the firmware's
++	 * ONLY lr/sc (the spinlocks use AMO, which works), and it wedges the
++	 * S-mode handoff in sbi_hsm_hart_start_finish. This is a single-hart
++	 * system, so emulate CAS in an M-interrupt-safe critical section.
++	 */
++	long ret;
++	unsigned long m = csr_read_clear(CSR_MSTATUS, MSTATUS_MIE);
++
++	ret = atom->counter;
++	if (ret == oldval)
++		atom->counter = newval;
++	if (m & MSTATUS_MIE)
++		csr_set(CSR_MSTATUS, MSTATUS_MIE);
++	return ret;
+ }
+ 
+ long atomic_xchg(atomic_t *atom, long newval)

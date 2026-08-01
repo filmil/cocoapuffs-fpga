@@ -1,0 +1,41 @@
+load(
+    "@rules_vivado//build/vivado:rules.bzl",
+    "vivado_library",
+    "vivado_unisims_library",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+vivado_unisims_library(
+    name = "unisims",
+    export_libraries = [
+        "unisims_ver",
+        "unimacro_ver",
+        "unifast_ver",
+        "secureip",
+    ],
+    language = "verilog",
+    no_ip_compile = True,
+    quiet = True,
+)
+
+vivado_unisims_library(
+    name = "unisim",
+    export_libraries = [
+        "unisim",
+        "unimacro",
+        "unifast",
+        "secureip",
+    ],
+    language = "vhdl",
+    no_ip_compile = True,
+    quiet = True,
+)
+
+vivado_library(
+    name = "glbl",
+    standard = "2008",
+    srcs = [],
+    # This is a special setting used *only* for the glbl library.
+    use_glbl = True,
+)

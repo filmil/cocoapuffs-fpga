@@ -1,0 +1,25 @@
+load("@rules_nvc//build/nvc:rules.bzl", "vhdl_library")
+
+vhdl_library(
+    name = "vunit_lib",
+    standard = "2008",
+    # do not sort
+    srcs = [
+        "@vunit//:string_ops_srcs",
+        "@vunit//:path_srcs",
+        "@vunit//:core_srcs",
+        "@vunit//:data_types_srcs_pkg",
+        "@vunit//:logging_src_pkg",
+        "@vunit//:dictionary_srcs",
+        "@vunit//:data_types_srcs",
+        "@vunit//:data_types_context",
+        "@vunit//:logging_src_pkg_body",
+        "@vunit//:check_srcs",
+        "@vunit//:run_srcs",
+        "@vunit//:random_srcs",  # Needs osvvm library.
+        "@vunit//:vunit_context",
+    ],
+    deps = [
+        "//third_party/osvvm/tool.nvc:osvvm",
+    ],
+)

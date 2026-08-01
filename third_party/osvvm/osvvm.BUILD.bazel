@@ -1,0 +1,65 @@
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "srcs1",
+    # do not sort
+    srcs = [
+        "IfElsePkg.vhd",
+        "NamePkg.vhd",
+        "OsvvmGlobalPkg.vhd",
+        "OsvvmScriptSettingsPkg.vhd",
+        "TranscriptPkg.vhd",
+        "TextUtilPkg.vhd",
+        "FileUtilPkg.vhd",
+    ],
+)
+
+filegroup(
+    name = "srcs2_nvc",
+    # do not sort
+    srcs = [
+        #CoverageVendorApiPkg_Aldec.vhd",
+        "CoverageVendorApiPkg_NVC.vhd",
+        #"CoverageVendorApiPkg_default.vhd",
+    ],
+)
+
+filegroup(
+    name = "srcs",
+    # do not sort
+    srcs = [
+        "FileLinePathPkg.vhd",
+        #"deprecated/FileLinePathPkg_c.vhd",
+        "LanguageSupport2019Pkg.vhd",
+        "OsvvmSettingsPkg.vhd",
+        "AlertLogPkg.vhd",
+        "ResolutionPkg.vhd",
+        "TbUtilPkg.vhd",
+        "SortListPkg_int.vhd",
+        "RandomBasePkg.vhd",
+        "RandomProcedurePkg.vhd",
+        "OsvvmTypesPkg.vhd",
+        "RandomPkg.vhd",
+        "NameStorePkg.vhd",
+        "MessageListPkg.vhd",
+        "MemorySupportPkg.vhd",
+        "CoveragePkg.vhd",
+        "ClockResetPkg.vhd",
+        "MemoryGenericPkg.vhd",
+        "MemoryPkg.vhd",
+        "MessagePkg.vhd",
+        "RandomPkg2019.vhd",
+        "DelayCoveragePkg.vhd",
+        "ResizePkg.vhd",
+        "ScoreboardGenericPkg.vhd",
+        "ScoreboardPkg_IntV.vhd",
+        "ScoreboardPkg_int.vhd",
+        "ScoreboardPkg_signed.vhd",
+        "ScoreboardPkg_slv.vhd",
+        "ScoreboardPkg_unsigned.vhd",
+        "ReportPkg.vhd",
+        "OsvvmScriptSettingsPkg_default.vhd",
+        "OsvvmSettingsPkg_default.vhd",
+        "OsvvmContext.vhd",
+    ],
+)

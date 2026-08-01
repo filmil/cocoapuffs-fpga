@@ -1,0 +1,7 @@
+--- a/fusesoc_libraries/muntjac/ip/pipeline/rtl/muntjac_backend.sv
++++ b/fusesoc_libraries/muntjac/ip/pipeline/rtl/muntjac_backend.sv
+@@ -1149,2 +1149,2 @@
+-    .ex_valid_i (mem_trap_valid || exception_issue || int_valid),
+-    .ex_exception_i (mem_trap_valid ? mem_trap : (int_valid ? '{cause: int_cause, tval: '0} : de_ex_decoded.exception)),
++    .ex_valid_i (mem_trap_valid || exception_issue),
++    .ex_exception_i (mem_trap_valid ? mem_trap : (de_ex_decoded.exception.cause[4] ? '{de_ex_decoded.exception.cause, 64'h0} : de_ex_decoded.exception)),

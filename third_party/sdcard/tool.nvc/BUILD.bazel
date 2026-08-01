@@ -1,0 +1,27 @@
+load(
+    "@rules_nvc//build/nvc:rules.bzl",
+    "vhdl_library",
+    "vhdl_test",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+vhdl_library(
+    name = "sdcard",
+    standard = "2008",
+    srcs = ["//third_party/sdcard:srcs"],
+)
+
+vhdl_test(
+    name = "sdcard_test",
+    standard = "2008",
+    srcs = [
+        "//third_party/sdcard:sdcard.test.vhdl",
+    ],
+    entity = "sdcard_tb",
+    deps = [
+        ":sdcard",
+        "//testing/tool.nvc:testing",
+        "@rules_vunit//tool.nvc:vunit_lib",
+    ],
+)

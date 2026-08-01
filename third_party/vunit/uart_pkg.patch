@@ -1,0 +1,15 @@
+--- a/vunit/vhdl/verification_components/src/uart_pkg.vhd
++++ b/vunit/vhdl/verification_components/src/uart_pkg.vhd
+@@ -54,1 +54,1 @@
+-  constant uart_set_baud_rate_msg : msg_type_t := new_msg_type("uart set baud rate");
++  constant uart_set_baud_rate_msg : msg_type_t := (p_code => 10);
+@@ -57,1 +57,8 @@
+-package body uart_pkg is
++package body uart_pkg is
++  impure function init_uart_pkg return boolean is
++    variable dummy : msg_type_t;
++  begin
++    dummy := new_msg_type("uart set baud rate");
++    return true;
++  end function;
++  constant uart_pkg_dummy : boolean := init_uart_pkg;

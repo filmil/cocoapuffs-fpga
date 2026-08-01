@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: Apache-2.0
+load(
+    "@rules_vivado//build/vivado:rules.bzl",
+    "vivado_library",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+vivado_library(
+    name = "osvvm",
+    standard = "2008",
+    # do not sort
+    srcs = [
+        # srcs1
+        "@osvvm//:IfElsePkg.vhd",
+        "@osvvm//:NamePkg.vhd",
+        "@osvvm//:OsvvmGlobalPkg.vhd",
+        "@osvvm//:OsvvmScriptSettingsPkg.vhd",
+        "@osvvm//:TranscriptPkg.vhd",
+        "@osvvm//:TextUtilPkg.vhd",
+        "@osvvm//:FileUtilPkg.vhd",
+        
+        # Coverage Vendor API
+        "//third_party/osvvm:CoverageVendorApiPkg_default.vhd",
+        
+        # srcs (excluding FileLinePathPkg.vhd and RandomPkg2019.vhd)
+        "@osvvm//:LanguageSupport2019Pkg.vhd",
+        "@osvvm//:OsvvmSettingsPkg.vhd",
+        "@osvvm//:AlertLogPkg.vhd",
+        "@osvvm//:ResolutionPkg.vhd",
+        "@osvvm//:TbUtilPkg.vhd",
+        "@osvvm//:SortListPkg_int.vhd",
+        "@osvvm//:RandomBasePkg.vhd",
+        "@osvvm//:RandomProcedurePkg.vhd",
+        "@osvvm//:OsvvmTypesPkg.vhd",
+        "@osvvm//:RandomPkg.vhd",
+        "@osvvm//:NameStorePkg.vhd",
+        "@osvvm//:MessageListPkg.vhd",
+        "@osvvm//:MemorySupportPkg.vhd",
+        "@osvvm//:CoveragePkg.vhd",
+        "@osvvm//:ClockResetPkg.vhd",
+        "@osvvm//:MemoryGenericPkg.vhd",
+        "@osvvm//:MemoryPkg.vhd",
+        "@osvvm//:MessagePkg.vhd",
+        "@osvvm//:RandomPkg2019.vhd",
+        "@osvvm//:DelayCoveragePkg.vhd",
+        "@osvvm//:ResizePkg.vhd",
+        "@osvvm//:ScoreboardGenericPkg.vhd",
+        "@osvvm//:ScoreboardPkg_IntV.vhd",
+        "@osvvm//:ScoreboardPkg_int.vhd",
+        "@osvvm//:ScoreboardPkg_signed.vhd",
+        "@osvvm//:ScoreboardPkg_slv.vhd",
+        "@osvvm//:ScoreboardPkg_unsigned.vhd",
+        "@osvvm//:ReportPkg.vhd",
+        "@osvvm//:OsvvmScriptSettingsPkg_default.vhd",
+        "@osvvm//:OsvvmSettingsPkg_default.vhd",
+        "@osvvm//:OsvvmContext.vhd",
+    ],
+)

@@ -1,0 +1,139 @@
+load("@rules_shar//:macros.bzl", "shar_binary")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+load("@rules_shell//shell:sh_library.bzl", "sh_library")
+
+package(default_visibility = ["//visibility:public"])
+
+sh_library(
+    name = "local_runfiles",
+    srcs = ["runfiles.bash"],
+)
+
+shar_binary(
+    name = "serial_upload",
+    srcs = [
+        "serial_upload.bash",
+    ],
+    data = [
+        ":local_runfiles",
+        "//bin/loadtest:hex",
+        "//bin/pic_test:hex",
+        "//bin/echo:hex",
+        "//bin/hello:hex",
+        # NOEL-V "hello" payload linked at 0x40000, run from DDR3 via the boot
+        # stub handoff to check DDR3-resident code can store to the APBUART
+        # (runfiles path: bin/noelv_hello_ddr3/hex.hex).
+        "//bin/noelv_hello_ddr3:hex",
+        # NOEL-V DDR3 data load/store test, linked at 0x40000: writes a pattern to
+        # DDR3 0x80000, reads it back, prints OK/BAD -- isolates the DDR3 data path
+        # (runfiles path: bin/noelv_ddr3_rwtest/hex.hex).
+        "//bin/noelv_ddr3_rwtest:hex",
+        # OpenSBI firmware ihex payload for the NOEL-V board, uploaded over
+        # serial to the SERV ihex loader (runfiles path: boards/noelv/opensbi_fw.hex).
+        "//boards/noelv:opensbi_fw_hex",
+        # Same shim image but loaded 2 MB-aligned at 0x200000 (rung-2 alignment
+        # experiment; runfiles path: boards/noelv/opensbi_fw_shim_2m.hex).
+        "//boards/noelv:opensbi_fw_shim_2m_hex",
+        # Same OpenSBI, minimal hello-world payload -> ~2.4x shorter upload
+        # (runfiles path: boards/noelv/opensbi_fw_hello.hex).
+        "//boards/noelv:opensbi_fw_hello_hex",
+        # OpenSBI + the self-contained Fuchsia Cocoapuffs "hello" image (kernel
+        # included), to test the full boot path end to end
+        # (runfiles path: boards/noelv/opensbi_fw_cocoapuffs.hex).
+        "//boards/noelv:opensbi_fw_cocoapuffs_hex",
+        # Rung 3 (BOOT_LADDER.md): OpenSBI + linux boot-shim + full kernel.eng.zbi
+        # at 0x10000000 + ZBI-aware DTB, one multi-region ihex
+        # (runfiles path: boards/noelv/opensbi_fw_zircon.hex).
+        "//boards/noelv:opensbi_fw_zircon_hex",
+        # Rung 3 with OpenSBI relocated high (0x3D000000) via the 0x40000
+        # trampoline, so physboot's low-RAM kernel reloc doesn't overwrite OpenSBI
+        # (runfiles path: boards/noelv/opensbi_fw_zircon_reloc.hex).
+        "//boards/noelv:opensbi_fw_zircon_reloc_hex",
+        # Firmware-only (OpenSBI + shim + zircon DTB, no ZBI) to isolate the rung-3
+        # OpenSBI silence (runfiles path: boards/noelv/opensbi_fw_zircon_fwonly.hex).
+        "//boards/noelv:opensbi_fw_zircon_fwonly_hex",
+        # Rung 3 with the ZBI uploaded FIRST and firmware LAST (DDR3-decay test;
+        # runfiles path: boards/noelv/opensbi_fw_zircon_zbifirst.hex).
+        "//boards/noelv:opensbi_fw_zircon_zbifirst_hex",
+        # MEM_CONFIG-dump debug shim (halts after snapshotting to 0x3E000000); short,
+        # no-ZBI (runfiles path: boards/noelv/opensbi_fw_zircon_memcfgdump.hex).
+        "//boards/noelv:opensbi_fw_zircon_memcfgdump_hex",
+        # Full A/B/C dump image (debug shim dumps A+B then boots; instrumented ZBI
+        # dumps C) (runfiles path: boards/noelv/opensbi_fw_zircon_memcfgdump_full.hex).
+        "//boards/noelv:opensbi_fw_zircon_memcfgdump_full_hex",
+        # Standalone DDR3 RW/heap-region (0x80000-0x92000) memory test, to isolate
+        # the on-hardware sbi_domain_init failure to the memory subsystem
+        # (runfiles path: bin/noelv_memtest/hex.hex).
+        "//bin/noelv_memtest:hex",
+        # Standalone atomics (amoswap/amoadd) test on DDR3 0x80000 -- checks
+        # whether the AHB->DDR3 path supports AMO (OpenSBI's locks need it)
+        # (runfiles path: bin/noelv_atomictest/hex.hex).
+        "//bin/noelv_atomictest:hex",
+        # Standalone test that SERV correctly loads a .data section at 0x80000
+        # (ihex 0x8000-segment, where OpenSBI's RW data lives)
+        # (runfiles path: bin/noelv_datatest/hex.hex).
+        "//bin/noelv_datatest:hex",
+        # Standalone byte-write (sub-word store) test -- confirms sbi_memcpy
+        # (byte-wise) corrupts DDR3 while aligned sw/sd work, the root cause of
+        # the sbi_domain_init failure (runfiles path: bin/noelv_bytetest/hex.hex).
+        "//bin/noelv_bytetest:hex",
+        # Standalone full-1GB DDR3 aliasing + read/write test -- verifies the
+        # wide-WB adapter fix (no more 128MB aliasing) so board.dts can declare
+        # 1GB (runfiles path: bin/noelv_memtest1g/hex.hex).
+        "//bin/noelv_memtest1g:hex",
+        # Standalone CLINT (mtime/mtimecmp @0xE0000000) probe -- is the
+        # on-hardware ACLINT alive? Suspected cause of the S-mode handoff wedge
+        # (runfiles path: bin/noelv_clinttest/hex.hex).
+        "//bin/noelv_clinttest:hex",
+        # Standalone LR/SC probe on DDR3 -- do load-reserved/store-conditional
+        # reservations hold on uncached DDR3? (the atomic_cmpxchg wedge)
+        # (runfiles path: bin/noelv_lrsctest/hex.hex).
+        "//bin/noelv_lrsctest:hex",
+        # Standalone S-mode-execute probe -- does S-mode execute from DDR3 at all?
+        # (the root cause of the Fuchsia shim's recurring trap; expect "SMODE OK" or
+        # "SMODE FAULT <cause> <epc> <tval>") (runfiles: bin/noelv_smodetest/hex.hex).
+        "//bin/noelv_smodetest:hex",
+        # Clean HW re-measurement of APBUART (PLIC source 1) interrupt delivery to
+        # the hart: arms MSIP/M-ext/S-ext, prints mip/sip + PLIC pending (never
+        # claim) then confirms the trap (runfiles: bin/noelv_irqtest/hex.hex).
+        "//bin/noelv_irqtest:hex",
+        # Shim-trap probe: runs the real Fuchsia shim (embedded at 0x240000) in
+        # S-mode under our trap handler, prints "SHIM TRAP <cause> <epc> <tval>" on
+        # its first fault (runfiles: bin/noelv_shimtrap/hex.hex).
+        "//bin/noelv_shimtrap:hex",
+        "//third_party/shlib",
+        "@fshlib//:log",
+        "@gotopt2//:bin",
+        "@multitool//tools/serial_upload",
+        "@rules_bid//build:resolve",
+        "@rules_shell//shell/runfiles",
+        "hello.txt",
+    ],
+    deps = [
+        "@bazel_tools//tools/bash/runfiles",
+        "@rules_shell//shell/runfiles",
+    ],
+)
+
+sh_binary(
+    name = "upload",
+    srcs = [
+        "upload.bash",
+    ],
+    args = [
+        "--upload-shar=$(location :serial_upload_shar)",
+    ],
+    data = [
+        ":serial_upload_shar",
+        "@gotopt2//:bin",
+        "@multitool//tools/serial_upload",
+        "@bazel_tools//tools/bash/runfiles",
+        "@rules_bid//build:resolve",
+        "@fshlib//:log",
+    ],
+    deps = [
+        "@fshlib//:log",
+        "@bazel_tools//tools/bash/runfiles",
+        "@rules_shell//shell/runfiles",
+    ],
+)

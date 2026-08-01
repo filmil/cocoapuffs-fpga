@@ -1,0 +1,9 @@
+--- a/vunit/vhdl/verification_components/src/sync_pkg.vhd
++++ b/vunit/vhdl/verification_components/src/sync_pkg.vhd
+@@ -31,3 +31,3 @@
+-  constant wait_until_idle_msg       : msg_type_t := new_msg_type("wait until idle");
+-  constant wait_until_idle_reply_msg : msg_type_t := new_msg_type("wait until idle reply");
+-  constant wait_for_time_msg         : msg_type_t := new_msg_type("wait for time");
++  constant wait_until_idle_msg       : msg_type_t := (p_code => 2);
++  constant wait_until_idle_reply_msg : msg_type_t := (p_code => 3);
++  constant wait_for_time_msg         : msg_type_t := (p_code => 4);

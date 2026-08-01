@@ -1,0 +1,11 @@
+--- a/vunit/vhdl/data_types/src/string_ptr_pkg-body-2002p.vhd
++++ b/vunit/vhdl/data_types/src/string_ptr_pkg-body-2002p.vhd
+@@ -153,1 +153,1 @@
+-          st.eptrs(st.eptr) := get_ptr(eid);
++          assert false report "extacc not supported on Vivado" severity failure;
+@@ -210,1 +210,1 @@
+-        when extfnc   => write_char(s.id, index-1, value);
++        when extfnc   => assert false report "extfnc not supported on Vivado" severity failure;
+@@ -223,1 +223,1 @@
+-        when extfnc   => return read_char(s.id, index-1);
++        when extfnc   => assert false report "extfnc not supported on Vivado" severity failure; return ' ';

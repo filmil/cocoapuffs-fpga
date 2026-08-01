@@ -1,0 +1,22 @@
+--- a/vunit/vhdl/run/src/run_types.vhd
++++ b/vunit/vhdl/run/src/run_types.vhd
+@@ -52,5 +52,18 @@
+   -- Private
+-  constant run_db : dict_t := new_dict;
++  constant run_db : dict_t := (
++    p_meta => (ref => 0),
++    p_bucket_lengths => (ref => 1),
++    p_bucket_keys => (ref => 2),
++    p_bucket_values => (ref => 3),
++    p_bucket_value_types => (ref => 4)
++  );
+ end package;
+ 
+ package body run_types_pkg is
++  impure function init_run_db return boolean is
++    variable dummy : dict_t;
++  begin
++    dummy := new_dict;
++    return true;
++  end function;
++  constant run_db_dummy : boolean := init_run_db;

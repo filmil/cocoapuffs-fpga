@@ -1,0 +1,21 @@
+DEBUG: make the gaisler APBUART putc use the "drained" method (poll status bit1
+TS = TX shift-register empty, one char fully transmitted before the next) instead
+of bursting into the 8-deep TX FIFO via FIFOFULL (bit9).
+
+On the a200t board the FIFO-burst path produces ~4x character duplication on the
+wire (each char transmitted multiple times), while the drained method -- the same
+one the boot stub and //bin/noelv_memtest use -- transmits cleanly. This makes
+OpenSBI's own console output readable on hardware so its diagnostics (e.g. the
+sbi_domain_init failure message) can actually be seen.
+
+--- a/lib/utils/serial/gaisler-uart.c
++++ b/lib/utils/serial/gaisler-uart.c
+@@ -43,7 +43,7 @@
+ 
+ static void gaisler_uart_putc(char ch)
+ {
+-	while (get_reg(UART_REG_STATUS) & UART_STATUS_FIFOFULL)
++	while (!(get_reg(UART_REG_STATUS) & 0x2)) /* TS: TX shift empty (drained, no FIFO burst) */
+ 		;
+ 
+ 	set_reg(UART_REG_DATA, ch);

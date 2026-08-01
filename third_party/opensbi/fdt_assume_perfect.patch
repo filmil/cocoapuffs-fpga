@@ -1,0 +1,20 @@
+Speed up OpenSBI's libfdt by trusting the (compiled, embedded) device tree.
+
+OpenSBI's generic platform re-walks the FDT dozens of times during
+fw_platform_init / fdt_serial_init, and every libfdt primitive
+(fdt_offset_ptr, fdt_ro_probe_, ...) re-validates the header with byte-wise
+big-endian reads. In RTL simulation of the NOEL-V core this dominates wall
+time (~80% of executed instructions, hours to reach sbi_hart_pmp_configure).
+
+Our FDT is produced by dtc and embedded in the firmware (fully trusted), so
+default FDT_ASSUME_MASK to ASSUME_PERFECT (0xff): libfdt then skips the
+redundant validation. Behavior is identical for a valid DTB; ~3-4x fewer
+instructions through the FDT code.
+
+--- a/lib/utils/libfdt/libfdt_internal.h
++++ b/lib/utils/libfdt/libfdt_internal.h
+@@ -74,3 +74,3 @@
+ #ifndef FDT_ASSUME_MASK
+-#define FDT_ASSUME_MASK 0
++#define FDT_ASSUME_MASK 0xff
+ #endif

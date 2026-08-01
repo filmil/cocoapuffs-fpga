@@ -1,0 +1,37 @@
+package(default_visibility = ["//visibility:public"])
+
+# The prebuilt RISC-V64 Linux boot shim (an EFI/"MZ" Image). This is NOT a
+# "hello world" program -- it was previously mislabelled `hello-world`.
+filegroup(
+    name = "riscv64-boot-shim",
+    srcs = ["linux-riscv64-boot-shim.bin"],
+)
+
+# DEBUG one-shot variant of the boot-shim (COCOAPUFFS_MEMCFG_DEBUG_DUMP=1): runs
+# shim_helper.InitItems() to build + Init() the same PoolMemConfigItem physboot
+# consumes, writes a MEM_CONFIG snapshot to 0x3E000000 (magic "MEMCDB01" + u32 count
+# + zbi_mem_range_t[]), then `fence; wfi` -- does NOT boot physboot. JTAG-read
+# 0x3E000000 to see whether the shim emits the OpenSBI reservation as a hole. md5
+# 16707ef0af987bb88dea775535ac2afe. Built by the Fuchsia-side worker.
+filegroup(
+    name = "riscv64-boot-shim-memcfgdump",
+    srcs = ["riscv64-boot-shim-memcfgdump.bin"],
+)
+
+# Self-contained Fuchsia "hello" image for the Cocoapuffs (a200t/NOEL-V) board --
+# a small (~28 KB) RISC-V64 Linux Image with the kernel included, used as an
+# OpenSBI payload to test the full boot path (OpenSBI -> S-mode handoff -> hello).
+filegroup(
+    name = "cocoapuffs-hello",
+    srcs = ["cocoapuffs-hello.bin"],
+)
+
+# Full Zircon kernel in ZBI container format (~1.8 MB), booted by the boot-shim
+# (rung 3 of //boards/noelv/BOOT_LADDER.md). gitignored snapshot: refresh from
+# $HOME/b3/fuchsia/out/rung4-noV/kernel.eng.zbi (the active fx build dir;
+# riscv64_enable_vector=false -- the rung-4 fix.  The old pointer to
+# out/bringup.riscv64-balanced is a different, stale build).
+filegroup(
+    name = "kernel-zbi",
+    srcs = ["kernel.eng.zbi"],
+)

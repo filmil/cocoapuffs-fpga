@@ -1,0 +1,5 @@
+--- a/vunit/vhdl/data_types/src/types.vhd
++++ b/vunit/vhdl/data_types/src/types.vhd
+@@ -15,1 +15,1 @@
+-  type extstring_access_t is access string(1 to integer'high);
++  type extstring_access_t is access string(1 to 1024);

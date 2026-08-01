@@ -1,0 +1,45 @@
+# See LICENSE file.
+load(
+    "@rules_nvc//build/nvc:rules.bzl",
+    "vhdl_run",
+    nvc_elaborate = "vhdl_elaborate",
+    nvc_vhdl_library = "vhdl_library",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+#######################################################################
+# VHDL Simulation
+
+nvc_vhdl_library(
+    name = "lib_uart",
+    standard = "2008",
+    srcs = [
+        "@uart_vhdl//:uart",
+    ],
+    entities = [
+        "loopback",
+        "generic_fifo",
+        "uart",
+    ],
+)
+
+nvc_vhdl_library(
+    name = "third_party_uart_tb",
+    standard = "2008",
+    srcs = [
+        "@uart_vhdl//:tb",
+    ],
+    entities = [
+        "tb_uart",
+    ],
+    deps = [
+        ":lib_uart",
+    ],
+)
+
+nvc_elaborate(
+    name = "tb_uart",
+    library = ":third_party_uart_tb",
+    standard = "2008",
+)

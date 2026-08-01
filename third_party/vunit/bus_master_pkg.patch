@@ -1,0 +1,11 @@
+--- a/vunit/vhdl/verification_components/src/bus_master_pkg.vhd
++++ b/vunit/vhdl/verification_components/src/bus_master_pkg.vhd
+@@ -187,4 +187,4 @@
+-  constant bus_write_msg : msg_type_t := new_msg_type("write bus");
+-  constant bus_read_msg : msg_type_t := new_msg_type("read bus");
+-  constant bus_burst_write_msg : msg_type_t := new_msg_type("burst write bus");
+-  constant bus_burst_read_msg : msg_type_t := new_msg_type("burst read bus");
++  constant bus_write_msg : msg_type_t := (p_code => 5);
++  constant bus_read_msg : msg_type_t := (p_code => 6);
++  constant bus_burst_write_msg : msg_type_t := (p_code => 7);
++  constant bus_burst_read_msg : msg_type_t := (p_code => 8);

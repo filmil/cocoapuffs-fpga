@@ -1,0 +1,84 @@
+# project/BUILD.bazel
+
+load("@bazel_lib//lib:transitions.bzl", "platform_transition_filegroup")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+load(":macros.bzl", "bin_file", "disasm_file", "hex_file", "memh_file")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "startup",
+    srcs = [
+        "startup/entry.S",
+        "startup/start.c",
+    ],
+    copts = [
+        # The `serv` risc-v processor only supports the basic `i` instruction
+        # set. Optionally it suports zicsr, which we keep turned on.
+        "-march=rv32i_zicsr",
+        "-mabi=ilp32",
+        "-mcmodel=medany",
+    ],
+    linkopts = [
+        "-T$(location :startup/linker.ld)",
+        "-nostartfiles",
+        "-mabi=ilp32",
+    ],
+    target_compatible_with = [
+        "@platforms//os:none",
+        "//third_party/riscv32_toolchain/constraints/march:i",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [":startup/linker.ld"],
+)
+
+cc_binary(
+    name = "baremetal",
+    srcs = ["main.cc"],
+    copts = [
+        "-march=rv32i_zicsr",
+        "-mabi=ilp32",
+        "-mcmodel=medany",
+    ],
+    linkopts = [
+        "-mabi=ilp32",
+        "-mcmodel=medany",
+    ],
+    tags = ["manual"],
+    deps = [":startup"],
+)
+
+platform_transition_filegroup(
+    name = "elf_rv32i",
+    srcs = [":baremetal"],
+    target_platform = "//third_party/riscv32_toolchain/platform:rv32i",
+    visibility = ["//visibility:public"],
+)
+
+hex_file(
+    name = "hex",
+    srcs = [
+        ":elf_rv32i",
+    ],
+)
+
+bin_file(
+    name = "bin",
+    srcs = [
+        ":elf_rv32i",
+    ],
+)
+
+disasm_file(
+    name = "disasm",
+    srcs = [
+        ":elf_rv32i",
+    ],
+)
+
+memh_file(
+    name = "memh",
+    srcs = [
+        ":bin",
+    ],
+)

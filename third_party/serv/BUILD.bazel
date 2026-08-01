@@ -1,0 +1,125 @@
+load("@rules_nvc//build/nvc:rules.bzl", "extract_file", "produce_waveform", "wave_view")
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+load("@rules_verilator//verilator:defs.bzl", "verilator_cc_library")
+load("@rules_verilog//verilog:defs.bzl", "verilog_library")
+load(
+    "@rules_vivado//build/vivado:rules.bzl",
+    "vivado_library",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "0003-fix-serv-wfi-decoding.patch",
+    "0003-fix-wfi-decoding.patch",
+])
+
+## Synthesis
+
+vivado_library(
+    name = "serving_vivado",
+    standard = "2008",
+    srcs = ["@serv//:serving"],
+    defines = {
+        "WITH_CSR": "1",
+    },
+    library_name = "serving",
+    deps = [
+        ":serv_vivado",
+        ":servile_vivado",
+    ],
+)
+
+vivado_library(
+    name = "servile_vivado",
+    standard = "2008",
+    srcs = ["@serv//:servile"],
+    defines = {
+        "WITH_CSR": "1",
+    },
+    library_name = "servile",
+    deps = [
+        ":serv_vivado",
+    ],
+)
+
+vivado_library(
+    name = "serv_vivado",
+    standard = "2008",
+    srcs = ["@serv"],
+    defines = {
+        "WITH_CSR": "1",
+    },
+    library_name = "serv",
+)
+
+##
+## Simulation
+
+verilog_library(
+    name = "serving",
+    srcs = ["@serv//:serving"],
+    data = [
+        "//third_party/riscv32_toolchain:memh",
+    ],
+    deps = [
+        ":servile",
+    ],
+)
+
+verilog_library(
+    name = "servile",
+    srcs = ["@serv//:servile"],
+    deps = [
+        ":serv",
+    ],
+)
+
+verilog_library(
+    name = "serv",
+    srcs = ["@serv"],
+)
+
+verilator_cc_library(
+    name = "serving_c",
+    module = ":serving",
+    module_top = "serving",
+    trace = True,
+    vopts = [
+        "-GRESET_STRATEGY=\\\"MINI\\\"",
+        # This path is brittle, find a way to figure it out otherwise.
+        "-Gmemfile=\\\"bazel-out/k8-fastbuild/bin/third_party/riscv32_toolchain/memh.mem\\\"",
+        "-Gmemsize={}".format(1024 * 64),
+        "-Gsim=1",
+        "-GWITH_CSR=1",
+    ],
+)
+
+cc_binary(
+    name = "sim",
+    srcs = [
+        "main.cc",
+    ],
+    deps = [
+        ":serving_c",
+    ],
+)
+
+produce_waveform(
+    name = "wave",
+    args = [
+        "20000000",
+    ],
+    data = [
+        # The memory file is loaded when the sim is run.
+        # But it is specified in verilator_cc_library above.
+        "//third_party/riscv32_toolchain:memh",
+    ],
+    simulation = ":sim",
+)
+
+# bazel run //third-party/serv:view
+wave_view(
+    name = "view",
+    vhdl_run = ":wave",
+)

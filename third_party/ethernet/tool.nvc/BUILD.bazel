@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+
+load(
+    "@rules_nvc//build/nvc:rules.bzl",
+    "vhdl_library",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+vhdl_library(
+    name = "ethernet",
+    standard = "2008",
+    srcs = ["//third_party/ethernet:srcs"],
+)

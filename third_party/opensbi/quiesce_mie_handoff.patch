@@ -1,0 +1,27 @@
+HW WORKAROUND (NOEL-V a200t, Smrnmi): mask M-interrupts before the S-mode handoff.
+
+boards/noelv/fw_base.S sets mnstatus.NMIE=1 so the S-mode payload (Zircon) can
+take its PLIC/timer interrupts on this Smrnmi core (NMIE resets to 0 = all masked).
+But with NMIE=1, any M-mode interrupt still armed in `mie` fires the instant we mret
+into S-mode (M-interrupts are always taken in a lower privilege), before the payload
+installs its own trap vector, so the hart wedges at the payload entry with no output.
+Clear mie on the way out; single-hart + sstc, so nothing needs M-interrupts across the
+handoff, and OpenSBI re-arms them on ecall re-entry.  S-mode interrupts (sie /
+sstatus.SIE), which the payload console/timer use, are unaffected.
+
+--- a/lib/sbi/sbi_hart.c
++++ b/lib/sbi/sbi_hart.c
+@@ -1084,7 +1084,13 @@ sbi_hart_switch_mode(unsigned long arg0, unsigned long arg1,
+ 			csr_write(CSR_UIE, 0);
+ 		}
+ 	}
+ 
++	/*
++	 * NOEL-V Smrnmi (see boards/noelv fw_base.S NMIE=1): mask all M-mode
++	 * interrupts so none fires on S-mode entry before the payload installs
++	 * its trap vector.  OpenSBI re-arms them on ecall re-entry as needed.
++	 */
++	csr_write(CSR_MIE, 0);
+ 	register unsigned long a0 asm("a0") = arg0;
+ 	register unsigned long a1 asm("a1") = arg1;
+ 	__asm__ __volatile__("mret" : : "r"(a0), "r"(a1));

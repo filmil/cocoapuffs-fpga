@@ -1,0 +1,5 @@
+--- a/vunit/vhdl/data_types/src/string_ptr_pkg.vhd
++++ b/vunit/vhdl/data_types/src/string_ptr_pkg.vhd
+@@ -17,1 +17,1 @@
+-use work.external_string_pkg.all;
++-- unused import

@@ -1,0 +1,14 @@
+--- a/vunit/vhdl/verification_components/src/sync_pkg-body.vhd
++++ b/vunit/vhdl/verification_components/src/sync_pkg-body.vhd
+@@ -7,1 +7,10 @@
+-package body sync_pkg is
++package body sync_pkg is
++  impure function init_sync_pkg return boolean is
++    variable dummy1, dummy2, dummy3 : msg_type_t;
++  begin
++    dummy1 := new_msg_type("wait until idle");
++    dummy2 := new_msg_type("wait until idle reply");
++    dummy3 := new_msg_type("wait for time");
++    return true;
++  end function;
++  constant sync_pkg_dummy : boolean := init_sync_pkg;

@@ -1,0 +1,12 @@
+--- a/vunit/vhdl/verification_components/src/stream_master_pkg-body.vhd
++++ b/vunit/vhdl/verification_components/src/stream_master_pkg-body.vhd
+@@ -7,1 +7,8 @@
+-package body stream_master_pkg is
++package body stream_master_pkg is
++  impure function init_stream_master_pkg return boolean is
++    variable dummy : msg_type_t;
++  begin
++    dummy := new_msg_type("stream push");
++    return true;
++  end function;
++  constant stream_master_pkg_dummy : boolean := init_stream_master_pkg;

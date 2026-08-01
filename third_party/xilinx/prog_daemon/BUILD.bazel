@@ -1,0 +1,39 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+go_library(
+    name = "prog_daemon_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/filmil/a200t_examples/third_party/xilinx/prog_daemon",
+    visibility = ["//visibility:private"],
+)
+
+go_binary(
+    name = "prog_daemon",
+    embed = [":prog_daemon_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "prog_daemon_test",
+    srcs = ["main_test.go"],
+    embed = [":prog_daemon_lib"],
+)
+
+sh_binary(
+    name = "run",
+    srcs = [
+        "run_daemon.bash",
+    ],
+    data = [
+        ":prog_daemon",
+        "//third_party/xilinx/hw_server:hw_server_shar",
+        "//third_party/xilinx/hw_server:upload",
+        "@bazel_tools//tools/bash/runfiles",
+        "@gotopt2//:bin",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@fshlib//:log",
+    ],
+)

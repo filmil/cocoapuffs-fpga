@@ -1,0 +1,5 @@
+--- a/vunit/vhdl/run/src/run_api.vhd
++++ b/vunit/vhdl/run/src/run_api.vhd
+@@ -27,1 +27,1 @@
+-  constant runner_state : runner_t := new_runner;
++  constant runner_state : runner_t := (p_data => (ref => 0));

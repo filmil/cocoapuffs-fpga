@@ -1,0 +1,60 @@
+DEBUG (NOEL-V/HW): trace init_coldboot via raw bit-bang to the APBUART (poll TS,
+scaler 42), bypassing the garbling console. Tags: S=scratch_init H=heap_init
+R=fw_rw_offset F=fw_start Z=fw_size C=hart_count N=next_mode A=next_addr
+D=domain_init(rc). Last tag before the hang = failing step; hex = value/error
+code. Remove once the sbi_domain_init EINVAL is understood.
+
+--- a/lib/sbi/sbi_init.c
++++ b/lib/sbi/sbi_init.c
+@@ -214,6 +214,25 @@
+ static unsigned long entry_count_offset;
+ static unsigned long init_count_offset;
+ 
++/* DEBUG (NOEL-V/HW): raw bit-bang of a coldboot-step tag + value to the APBUART,
++ * bypassing the console (which garbles ~4x on the board). Poll status bit1 (TS),
++ * scaler 42 = 115200 -- the same clean method //bin/noelv_memtest uses. */
++static void dbg_bb(char tag, long val)
++{
++	volatile unsigned int *u = (volatile unsigned int *)0xFF900000UL;
++	int i, nib; char c;
++	u[3] = 42; u[2] = 3;
++	while (!(u[1] & 2)) ; u[0] = tag;
++	while (!(u[1] & 2)) ; u[0] = '=';
++	for (i = 28; i >= 0; i -= 4) {
++		nib = (val >> i) & 0xf;
++		c = (nib < 10) ? ('0' + nib) : ('a' + nib - 10);
++		while (!(u[1] & 2)) ; u[0] = c;
++	}
++	while (!(u[1] & 2)) ; u[0] = '\r';
++	while (!(u[1] & 2)) ; u[0] = '\n';
++}
++
+ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
+ {
+ 	int rc;
+@@ -222,16 +241,25 @@
+ 
+ 	/* Note: This has to be first thing in coldboot init sequence */
+ 	rc = sbi_scratch_init(scratch);
++	dbg_bb('S', rc);
+ 	if (rc)
+ 		sbi_hart_hang();
+ 
+ 	/* Note: This has to be second thing in coldboot init sequence */
+ 	rc = sbi_heap_init(scratch);
++	dbg_bb('H', rc);
+ 	if (rc)
+ 		sbi_hart_hang();
+ 
+ 	/* Note: This has to be the third thing in coldboot init sequence */
++	dbg_bb('R', scratch->fw_rw_offset);
++	dbg_bb('F', scratch->fw_start);
++	dbg_bb('Z', scratch->fw_size);
++	dbg_bb('C', plat->hart_count);
++	dbg_bb('N', scratch->next_mode);
++	dbg_bb('A', scratch->next_addr);
+ 	rc = sbi_domain_init(scratch, hartid);
++	dbg_bb('D', rc);
+ 	if (rc)
+ 		sbi_hart_hang();
+ 

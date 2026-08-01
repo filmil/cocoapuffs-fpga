@@ -1,0 +1,14 @@
+load("@rules_nvc//build/nvc:rules.bzl", "vhdl_library")
+
+package(default_visibility = ["//visibility:public"])
+
+vhdl_library(
+    name = "osvvm",
+    standard = "2019",
+    # do not sort
+    srcs = [
+        "@osvvm//:srcs1",
+        "@osvvm//:srcs2_nvc",
+        "@osvvm//:srcs",
+    ],
+)

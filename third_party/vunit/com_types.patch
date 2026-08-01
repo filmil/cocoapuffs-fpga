@@ -1,0 +1,20 @@
+--- a/vunit/vhdl/com/src/com_types.vhd
++++ b/vunit/vhdl/com/src/com_types.vhd
+@@ -425,8 +425,16 @@
+   impure function name(msg_type : msg_type_t) return string is
+   begin
+     return to_string(to_string_ptr(get(p_msg_types.p_name_ptrs, msg_type.p_code)));
+   end;
+ 
+-  constant message_handled : msg_type_t := new_msg_type("message handled");
++  impure function init_message_handled return boolean is
++    variable dummy : msg_type_t;
++  begin
++    dummy := new_msg_type("message handled");
++    return true;
++  end function;
++
++  constant message_handled_dummy : boolean := init_message_handled;
++  constant message_handled : msg_type_t := (p_code => 0);
+ 
+   impure function is_valid(code : integer) return boolean is

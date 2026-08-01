@@ -1,0 +1,22 @@
+Skip the 4 generic_early_init FDT driver scans that find nothing on our board
+(cppc/hsm/reset/suspend): each re-walks the whole device tree, and OpenSBI's
+libfdt walking dominates NOEL-V RTL simulation wall time. Our DTB has no such
+nodes, so these are functional no-ops -- removing them lets the sim reach the
+post-sbi_platform_early_init boot path in tractable time.
+
+DEBUG/sim aid: this disables the SBI system-reset / HSM-suspend / CPPC driver
+probing, so revert for a production firmware that needs those.
+
+--- a/platform/generic/platform.c
++++ b/platform/generic/platform.c
+@@ -257,10 +257,6 @@
+ 		if (rc)
+ 			return rc;
+ 
+-		fdt_cppc_init(fdt);
+-		fdt_hsm_init(fdt);
+-		fdt_reset_init(fdt);
+-		fdt_suspend_init(fdt);
+ 	}
+ 
+ 	if (!generic_plat || !generic_plat->early_init)

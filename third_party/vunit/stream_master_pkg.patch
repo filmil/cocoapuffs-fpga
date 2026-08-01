@@ -1,0 +1,7 @@
+--- a/vunit/vhdl/verification_components/src/stream_master_pkg.vhd
++++ b/vunit/vhdl/verification_components/src/stream_master_pkg.vhd
+@@ -32,3 +32,3 @@
+   -- Message type definitions used by VC implementing stream master VCI
+-  constant stream_push_msg : msg_type_t := new_msg_type("stream push");
++  constant stream_push_msg : msg_type_t := (p_code => 9);
+ end package;

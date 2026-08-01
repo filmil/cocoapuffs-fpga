@@ -1,0 +1,41 @@
+# An attempt to bring in all LSP information into this project.
+# It would be nice if the LSP info were served automatically from the source
+# repo. But currently it isn't and this is a one-time setup that seems good
+# enough.
+
+package(default_visibility = ["//visibility:public"])
+
+# VHDL LS entries for the vunit library.
+filegroup(
+    name = "vhdl_ls_vunit",
+    srcs = [
+        "@rules_vunit//third_party/vunit:srcs",
+        #"@rules_vunit//third_party/vunit:random_srcs",
+        #"@rules_vunit//third_party/vunit:path_srcs",
+        #"@rules_vunit//third_party/vunit:com_srcs",
+        #"@rules_vunit//third_party/vunit:verification_components_srcs",
+    ],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_lib_vunit_lib",
+        # This is required because the file path we get from `srcs` is relative
+        # to the source root of the origian repository, not ours.
+        "vhdl_ls_add_bazel-a200t_examples/",
+    ],
+)
+
+# VHDL LS entries for the osvvm library.
+filegroup(
+    name = "vhdl_ls_osvvm",
+    srcs = [
+        "@rules_osvvm//third_party:srcs",
+        "@rules_osvvm//third_party:srcs1",
+        "@rules_osvvm//third_party:srcs2_nvc",
+    ],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_lib_osvvm_lib",
+        # Similar to above.
+        "vhdl_ls_add_bazel-a200t_examples/",
+    ],
+)

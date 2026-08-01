@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "srcs",
+    srcs = [
+        "kk_ihex_read.c",
+        "kk_ihex_write.c",
+    ],
+)
+
+filegroup(
+    name = "hdrs",
+    srcs = [
+        "kk_ihex.h",
+        "kk_ihex_read.h",
+        "kk_ihex_write.h",
+    ],
+)
+
+cc_library(
+    name = "ihex",
+    srcs = [":srcs"],
+    hdrs = [":hdrs"],
+    copts = [
+        "-x", "c++",
+#        "-DIHEX_DISABLE_SEGMENTS",
+        "-DIHEX_LINE_MAX_LENGTH=256",
+        "-fpermissive",
+        "-march=rv32i_zicsr",
+        "-mabi=ilp32",
+        "-mcmodel=medany",
+    ],
+    linkopts = [
+        "-march=rv32i_zicsr",
+        "-mabi=ilp32",
+    ],
+    includes = [ "." ],
+)

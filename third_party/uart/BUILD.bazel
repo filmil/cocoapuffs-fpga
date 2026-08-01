@@ -1,0 +1,91 @@
+load("@rules_ghdl//:rules.bzl", "ghdl_library", "ghdl_verilog")
+
+# See LICENSE file.
+load(
+    "@rules_nvc//build/nvc:rules.bzl",
+    "vhdl_run",
+    nvc_elaborate = "vhdl_elaborate",
+    nvc_vhdl_library = "vhdl_library",
+)
+load(
+    "@rules_vivado//build/vivado:rules.bzl",
+    "vivado_library",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+######################################################################
+## Xilinx synthesis librarification.
+
+vivado_library(
+    name = "third_party_uart",
+    standard = "2008",
+    srcs = ["@uart_vhdl//:uart"],
+    library_name = "lib_uart",
+)
+
+#######################################################################
+# VHDL Simulation
+
+filegroup(
+    name = "uart_files",
+    srcs = [
+        "@uart_vhdl//:uart",
+    ],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_add_bazel-a200t_examples/",
+        "vhdl_ls_lib_uart",
+    ],
+)
+
+nvc_vhdl_library(
+    name = "lib_uart",
+    standard = "2008",
+    srcs = [
+        ":uart_files",
+    ],
+    entities = [
+        "loopback",
+        "generic_fifo",
+        "uart",
+    ],
+)
+
+nvc_vhdl_library(
+    name = "tb_uart_lib",
+    standard = "2008",
+    srcs = [
+        "@uart_vhdl//:tb",
+    ],
+    entities = [
+        "tb_uart",
+    ],
+    deps = [
+        ":lib_uart",
+    ],
+)
+
+nvc_elaborate(
+    name = "tb_uart",
+    library = ":tb_uart_lib",
+    standard = "2008",
+)
+
+######################################################################
+# Synthesis via Verilog / for mixed designs
+
+ghdl_library(
+    name = "lib_uart_ghdl",
+    srcs = ["@uart_vhdl//:uart"],
+)
+
+ghdl_verilog(
+    name = "lib_uart_ghdl_v",
+    generics = {
+        "baud": "115200",
+        "clock_frequency": "200000000",  # 200MHz
+    },
+    lib = ":lib_uart_ghdl",
+    unit = "top",
+)

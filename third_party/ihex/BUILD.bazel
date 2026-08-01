@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+#cc_library(
+#name = "ihex",
+#srcs = ["@ihex//:srcs"],
+#hdrs = ["@ihex//:hdrs"],
+#copts = [
+#"-DIHEX_DISABLE_SEGMENTS",
+#"-DIHEX_LINE_MAX_LENGTH=256",
+#],
+#)

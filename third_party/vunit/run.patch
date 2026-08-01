@@ -1,0 +1,12 @@
+--- a/vunit/vhdl/run/src/run.vhd
++++ b/vunit/vhdl/run/src/run.vhd
+@@ -22,1 +22,8 @@
+-package body run_pkg is
++package body run_pkg is
++  impure function init_run_pkg return boolean is
++    variable dummy : runner_t;
++  begin
++    dummy := new_runner;
++    return true;
++  end function;
++  constant run_pkg_dummy : boolean := init_run_pkg;

@@ -1,0 +1,20 @@
+# This package is placed into the uart external repository.
+# Prefer only having filegroups here, and have tool targets
+# be in tool-specific directories.
+
+package(default_visibility=["//visibility:public"])
+
+filegroup(
+    name = "uart",
+    srcs = [
+        "source/generic_fifo.vhd",
+        "source/loopback.vhd",
+        "source/uart.vhd",
+        "source/top.vhd",
+    ],
+)
+
+filegroup(
+    name = "tb",
+    srcs = ["source/tb_uart.vhd", ":uart"],
+)

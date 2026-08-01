@@ -1,0 +1,11 @@
+--- a/vunit/vhdl/check/src/check_api.vhd
++++ b/vunit/vhdl/check/src/check_api.vhd
+@@ -25,6 +25,6 @@
+ package check_pkg is
+ 
+-  constant default_checker : checker_t := new_checker("check");
+-  constant check_logger : logger_t := get_logger(default_checker);
++  constant default_checker : checker_t := (p_data => null_ptr);
++  constant check_logger : logger_t := (p_data => null_ptr);
+ 
+   signal check_enabled : std_logic := '1';

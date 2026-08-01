@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: Apache-2.0
+load(
+    "@rules_vivado//build/vivado:rules.bzl",
+    "vivado_library",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+vivado_library(
+    name = "uart16550",
+    standard = "2008",
+    # do not sort
+    srcs = [
+        "//third_party/uart16550:srcs",
+        "//third_party/uart16550:hdrs",
+    ],
+)

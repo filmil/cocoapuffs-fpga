@@ -1,0 +1,89 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Filip Filmar <filmil@gmail.com>
+Date: Sat, 2 May 2026 06:00:00 +0000
+Subject: [PATCH] fix: add variable initialization to registers for xsim
+ compatibility
+
+Several registers use async reset (always_ff @(posedge clk or negedge
+rst_ni)) but lack SystemVerilog variable initialization. Event-driven
+simulators like Vivado xsim evaluate always_comb blocks at time 0
+before any clock/reset edge triggers the always_ff blocks, so these
+registers hold X. This creates a delta cycle oscillation that prevents
+simulation time from advancing.
+
+Adding variable initialization (e.g., `logic valid = 1'b0`) gives these
+registers defined values from delta 0, matching their async reset
+values. This has no effect on synthesis.
+
+See: https://github.com/lowRISC/muntjac/issues/4
+
+---
+ ip/pipeline/rtl/muntjac_backend.sv  | 2 +-
+ ip/pipeline/rtl/muntjac_frontend.sv | 2 +-
+ vendor/OpenIP/rtl/regslice.sv       | 8 ++++----
+ 3 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/fusesoc_libraries/muntjac/ip/pipeline/rtl/muntjac_backend.sv b/fusesoc_libraries/muntjac/ip/pipeline/rtl/muntjac_backend.sv
+index 1234567..abcdefg 100644
+--- a/fusesoc_libraries/muntjac/ip/pipeline/rtl/muntjac_backend.sv
++++ b/fusesoc_libraries/muntjac/ip/pipeline/rtl/muntjac_backend.sv
+@@ -85,7 +85,7 @@ module muntjac_backend import muntjac_pkg::*; import tl_pkg::*; #(
+   // Decode-Execute pipeline register
+   //
+
+-  logic de_ex_valid;
++  logic de_ex_valid = 1'b0;
+   decoded_instr_t de_ex_decoded;
+
+   //
+diff --git a/fusesoc_libraries/muntjac/ip/pipeline/rtl/muntjac_frontend.sv b/fusesoc_libraries/muntjac/ip/pipeline/rtl/muntjac_frontend.sv
+index 1234567..abcdefg 100644
+--- a/fusesoc_libraries/muntjac/ip/pipeline/rtl/muntjac_frontend.sv
++++ b/fusesoc_libraries/muntjac/ip/pipeline/rtl/muntjac_frontend.sv
+@@ -230,7 +230,7 @@ module muntjac_frontend import muntjac_pkg::*; #(
+   // Latched response from icache
+   //
+
+-  logic resp_latched;
++  logic resp_latched = 1'b1;
+   logic [31:0] resp_instr_latched;
+   logic resp_exception_latched;
+   exc_cause_e resp_ex_code_latched;
+diff --git a/fusesoc_libraries/muntjac/vendor/OpenIP/rtl/regslice.sv b/fusesoc_libraries/muntjac/vendor/OpenIP/rtl/regslice.sv
+index 1234567..abcdefg 100644
+--- a/fusesoc_libraries/muntjac/vendor/OpenIP/rtl/regslice.sv
++++ b/fusesoc_libraries/muntjac/vendor/OpenIP/rtl/regslice.sv
+@@ -57,8 +57,8 @@ module openip_regslice #(
+         TYPE buffer;
+         TYPE skid_buffer;
+-        logic valid;
+-        logic skid_valid;
++        logic valid = 1'b0;
++        logic skid_valid = 1'b0;
+
+         // We can accept write if the skid buffer is still empty.
+         assign w_ready = !skid_valid;
+@@ -97,7 +97,7 @@ module openip_regslice #(
+         // This is equivalent to a depth 1 FIFO.
+         TYPE buffer;
+-        logic valid;
++        logic valid = 1'b0;
+
+         // We can read if the buffer is not empty and write if it is.
+         assign w_ready = !valid;
+@@ -122,7 +122,7 @@ module openip_regslice #(
+
+         TYPE buffer;
+-        logic valid;
++        logic valid = 1'b0;
+
+         // We can read if the buffer is not empty.
+         assign r_valid = valid;
+@@ -151,7 +151,7 @@ module openip_regslice #(
+
+         TYPE buffer;
+-        logic valid;
++        logic valid = 1'b0;
+
+         // We can read if the buffer is not empty, or data is fed in directly from w_data.
+         assign r_valid = valid || w_valid;

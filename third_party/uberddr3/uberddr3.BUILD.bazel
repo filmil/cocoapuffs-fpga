@@ -1,0 +1,114 @@
+# Build file for the UberDDR3 external repository
+#
+# Mostly just filegroup declarations. The build rules
+# are defined in BUILD.bazel.
+
+# @uberddr3//...
+
+package(default_visibility=["//visibility:public"])
+
+filegroup(
+    name = "rtl_axi",
+    srcs = [
+        # Do not reorder, else won't compile.
+        "rtl/axi/sfifo.v",
+        "rtl/axi/axi_addr.v",
+        "rtl/axi/axim2wbsp.v",
+        "rtl/axi/aximrd2wbsp.v",
+        "rtl/axi/ddr3_top_axi.v",
+        "rtl/axi/skidbuffer.v",
+        "rtl/axi/wbarbiter.v",
+    ],
+)
+
+filegroup(
+    name = "rtl_ecc",
+    srcs = [
+        "rtl/ecc/ecc_dec.sv",
+        "rtl/ecc/ecc_enc.sv",
+    ],
+)
+
+filegroup(
+    name = "rtl/ecp5_phy_phy",
+    srcs = [
+        "rtl/ecp5_phy/ddr3_phy_ecp5.v",
+    ],
+)
+
+filegroup(
+    name = "rtl/ecp5_phy_soft",
+    srcs = [
+        "rtl/ecp5_phy/iserdes_soft.v",
+        "rtl/ecp5_phy/oserdes_soft.v",
+    ],
+)
+
+filegroup(
+    name = "rtl_spd",
+    srcs = [
+        "rtl/spd/i2c_master.sv",
+        "rtl/spd/spd_clk_wiz.v",
+        "rtl/spd/spd_reader.v",
+        "rtl/spd/spd_reader_top.v",
+        "rtl/spd/uart_tx.v",
+    ],
+)
+
+filegroup(
+    name = "rtl_ddr3",
+    srcs = [
+        # Do not re-sort.
+        "rtl/ddr3_controller.v",
+        "rtl/ddr3_phy.v",
+    ],
+)
+
+# The README.md recommends editing this file (?!)
+filegroup(
+    name = "rtl_ddr3_top",
+    srcs = [
+        "rtl/ddr3_top.v",
+    ],
+)
+
+filegroup(
+    name = "testbench",
+    srcs = [
+        "testbench/ddr3.sv",
+        "testbench/ddr3_dimm.sv",
+        "testbench/ddr3_dimm_micron_sim.sv",
+        "testbench/ddr3_module.sv",
+    ],
+)
+
+filegroup(
+    name = "testbench_ddr3_mod",
+    srcs = [
+        "testbench/ddr3.sv",
+    ],
+)
+
+filegroup(
+    name = "testbench_sim_defines",
+    srcs = [
+        "testbench/sim_defines.vh",
+    ],
+)
+
+filegroup(
+    name = "testbench_8192m",
+    srcs = [
+        "testbench/8192Mb_ddr3_parameters.vh",
+    ],
+)
+
+filegroup(
+    name = "testbench_txt",
+    srcs = [
+        "testbench/README.txt",
+        "testbench/readme.txt",
+        "testbench/design.txt",
+    ],
+)
+

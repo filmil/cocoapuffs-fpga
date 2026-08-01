@@ -1,0 +1,25 @@
+From 407c9abd02d5639b2e0c8bbaf4f300da79a34a99 Mon Sep 17 00:00:00 2001
+From: Filip Filmar <filmil@gmail.com>
+Date: Thu, 9 Oct 2025 06:42:52 +0000
+Subject: [PATCH] patch: repo name
+
+---
+ MODULE.bazel | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/MODULE.bazel b/MODULE.bazel
+index 93a5d89..2380211 100644
+--- a/MODULE.bazel
++++ b/MODULE.bazel
+@@ -28,7 +28,7 @@ bazel_dep(name = "toolchains_llvm", version = "1.5.0", dev_dependency = True)
+ http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+ http_archive(
+     name = "nvc",
+-    build_file = "@//third_party/nvc:nvc.BUILD.bazel",
++    build_file = "//third_party/nvc:nvc.BUILD.bazel",
+     integrity = "sha256-AsCqrFn3J38xUfndtwUpKLe36Jwfd64rHEfVWYjGRYg=",
+     strip_prefix = "nvc-1.18.0",
+     urls = [
+-- 
+2.34.1
+

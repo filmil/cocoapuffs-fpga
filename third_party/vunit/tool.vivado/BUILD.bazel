@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+load(
+    "@rules_vivado//build/vivado:rules.bzl",
+    "vivado_library",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+vivado_library(
+    name = "vunit_lib",
+    standard = "2008",
+    srcs = [
+        "//testing/vunit:vunit_stubs.vhdl",
+    ],
+    deps = [
+        "//testing/tool.vivado:testing",
+    ],
+)
