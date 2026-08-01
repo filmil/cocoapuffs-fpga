@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: Apache-2.0
+load("//third_party/riscv32_toolchain:macros.bzl", "disasm_file", "hex_file")
+
+package(default_visibility = ["//visibility:public"])
+
+# RV64 NOEL-V DDR3 data load/store test, LINKED AT 0x40000 so the boot stub's
+# `jr 0x40000` handoff lands on _start.  Writes a pattern to a DDR3 scratch word,
+# reads it back, and prints "OK"/"BAD" -- isolates the DDR3 data path (the prime
+# suspect for the OpenSBI hang).  Upload the :hex over serial in place of OpenSBI.
+genrule(
+    name = "bin_raw",
+    srcs = ["main.S"],
+    outs = ["noelv_ddr3_rwtest.elf"],
+    cmd = "$(execpath @riscv_none_elf//:gcc) -march=rv64im -mabi=lp64 -nostartfiles -nostdlib " +
+          "-Wl,--section-start=.text=0x40000 -o $@ $<",
+    tools = ["@riscv_none_elf//:gcc"],
+)
+
+# Intel HEX for upload via the SERV ihex loader (//bin/noelv_serv_upload).
+hex_file(
+    name = "hex",
+    srcs = [":bin_raw"],
+)
+
+disasm_file(
+    name = "disasm",
+    srcs = [":bin_raw"],
+)

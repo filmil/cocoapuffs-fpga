@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: Apache-2.0
+load("//third_party/riscv32_toolchain:macros.bzl", "disasm_file", "hex_file")
+
+package(default_visibility = ["//visibility:public"])
+
+# RV64 NOEL-V "hello" writer, LINKED AT 0x40000 so the boot stub's `jr 0x40000`
+# handoff lands directly on _start.  Writes "hello\r\n" to the APBUART with
+# immediate byte stores: a minimal check that DDR3-resident code can do D-side
+# peripheral stores.  Upload the :hex over serial in place of OpenSBI.
+genrule(
+    name = "bin_raw",
+    srcs = ["main.S"],
+    outs = ["noelv_hello_ddr3.elf"],
+    cmd = "$(execpath @riscv_none_elf//:gcc) -march=rv64im -mabi=lp64 -nostartfiles -nostdlib " +
+          "-Wl,--section-start=.text=0x40000 -o $@ $<",
+    tools = ["@riscv_none_elf//:gcc"],
+)
+
+# Intel HEX for upload via the SERV ihex loader (//bin/noelv_serv_upload).
+hex_file(
+    name = "hex",
+    srcs = [":bin_raw"],
+)
+
+disasm_file(
+    name = "disasm",
+    srcs = [":bin_raw"],
+)
