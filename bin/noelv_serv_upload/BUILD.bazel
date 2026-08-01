@@ -1,0 +1,68 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@bazel_lib//lib:transitions.bzl", "platform_transition_filegroup")
+load("@rules_cc//cc:defs.bzl", rv32_cc_binary = "cc_binary")
+load("//third_party/riscv32_toolchain:macros.bzl", "bin_file", "disasm_file", "hex_file", "memh_file")
+
+package(default_visibility = ["//visibility:public"])
+
+# SERV-side Intel HEX uploader that hands off to NOEL-V. Receives an ihex over
+# the shared UART, writes it into shared RAM at the records' absolute addresses,
+# then enables NOEL-V (UART mux -> NOEL-V, release from reset). Links at 0x0 (the
+# startup linker default), which is where the noelv board boots the SERV core.
+rv32_cc_binary(
+    name = "upload_software",
+    srcs = ["main.cc"],
+    copts = [
+        "-march=rv32i_zicsr",
+        "-DUART_ADDRESS=0x40000010",
+        "-Wno-write-strings",
+        "-mcmodel=medany",
+        "-fPIE",
+        # Strip unused code so the image fits the small SERV boot memory.
+        "-Os",
+        "-ffunction-sections",
+        "-fdata-sections",
+    ],
+    linkopts = [
+        "-mcmodel=medany",
+        "-Wl,--emit-relocs",
+        "-Wl,--gc-sections",
+        # newlib-nano: a much smaller printf/malloc so the image fits the 64 KB
+        # SERV boot memory (the ihex decode path pulls in formatted printf).
+        "-specs=nano.specs",
+    ],
+    tags = ["manual"],
+    deps = [
+        "//lib/ihex",
+        "//lib/uart:lib",
+        "//third_party/riscv32_toolchain:startup",
+        "@ihex",
+    ],
+)
+
+platform_transition_filegroup(
+    name = "rv32i",
+    srcs = [":upload_software"],
+    target_platform = "//third_party/riscv32_toolchain/platform:rv32i",
+    visibility = ["//visibility:public"],
+)
+
+hex_file(
+    name = "hex",
+    srcs = [":rv32i"],
+)
+
+bin_file(
+    name = "bin",
+    srcs = [":rv32i"],
+)
+
+disasm_file(
+    name = "disasm",
+    srcs = [":rv32i"],
+)
+
+memh_file(
+    name = "memh",
+    srcs = [":bin"],
+)

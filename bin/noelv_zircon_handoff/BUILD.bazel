@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: Apache-2.0
+load("//third_party/riscv32_toolchain:macros.bzl", "bin_file", "disasm_file", "memh_file")
+
+package(default_visibility = ["//visibility:public"])
+
+# Minimal M-mode handoff stub that jumps straight into the riscv64-boot-shim at
+# 0x240000 inside the opensbi_fw_zircon image, passing the embedded ZBI-aware
+# DTB (fw_fdt_bin @ 0x5c000) in a1 -- the Zircon rung-3 boot sim without the
+# (xsim-hang-prone, too-slow) full OpenSBI boot.
+# See //boards/noelv/tool.vivado:zircon_zbi_handoff_trace.
+genrule(
+    name = "bin_raw",
+    srcs = ["main.S"],
+    outs = ["noelv_zircon_handoff.elf"],
+    cmd = "$(execpath @riscv_none_elf//:gcc) -march=rv64im_zicsr -mabi=lp64 -nostartfiles -nostdlib " +
+          "-Wl,--section-start=.text=0x0 -o $@ $<",
+    tools = ["@riscv_none_elf//:gcc"],
+)
+
+bin_file(
+    name = "bin",
+    srcs = [":bin_raw"],
+)
+
+disasm_file(
+    name = "disasm",
+    srcs = [":bin_raw"],
+)
+
+memh_file(
+    name = "memh",
+    srcs = [":bin"],
+)

@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@bazel_lib//lib:transitions.bzl", "platform_transition_filegroup")
+load("@rules_cc//cc:defs.bzl", rv32_cc_binary = "cc_binary")
+load("//third_party/riscv32_toolchain:macros.bzl", "bin_file", "disasm_file", "hex_file", "memh_file")
+
+package(default_visibility = ["//visibility:public"])
+
+rv32_cc_binary(
+    name = "bin_orig",
+    srcs = ["main.S"],
+    copts = [
+        "-mabi=ilp32",
+        "-march=rv32i",
+    ],
+    linkopts = [
+        "-nostartfiles",
+        "-Wl,--section-start=.text=0x0",
+    ],
+)
+
+platform_transition_filegroup(
+    name = "rv32i",
+    srcs = [":bin_orig"],
+    target_platform = "//third_party/riscv32_toolchain/platform:rv32i",
+    visibility = ["//visibility:public"],
+)
+
+hex_file(
+    name = "hex",
+    srcs = [
+        ":rv32i",
+    ],
+)
+
+bin_file(
+    name = "bin",
+    srcs = [
+        ":rv32i",
+    ],
+)
+
+memh_file(
+    name = "memh",
+    srcs = [
+        ":bin",
+    ],
+)

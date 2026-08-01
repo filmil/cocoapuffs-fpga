@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: Apache-2.0
+load("//third_party/riscv32_toolchain:macros.bzl", "bin_file", "disasm_file", "memh_file")
+
+package(default_visibility = ["//visibility:public"])
+
+# RV64 NOEL-V probe: does `csrw 0x747, zero` actually clear mseccfg.MML?  Boots
+# from the boot BRAM in tb_noelvsys_only and prints I=/S=/C= over the APBUART (and
+# the disas trace shows the CSR readbacks directly).  See main.S.  Needs zicsr.
+genrule(
+    name = "bin_raw",
+    srcs = ["main.S"],
+    outs = ["noelv_mseccfg_test.elf"],
+    cmd = "$(execpath @riscv_none_elf//:gcc) -march=rv64im_zicsr -mabi=lp64 -nostartfiles -nostdlib " +
+          "-Wl,--section-start=.text=0x0 -o $@ $<",
+    tools = ["@riscv_none_elf//:gcc"],
+)
+
+bin_file(
+    name = "bin",
+    srcs = [":bin_raw"],
+)
+
+disasm_file(
+    name = "disasm",
+    srcs = [":bin_raw"],
+)
+
+memh_file(
+    name = "memh",
+    srcs = [":bin"],
+)

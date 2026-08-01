@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: Apache-2.0
+load("//third_party/riscv32_toolchain:macros.bzl", "bin_file", "disasm_file", "memh_file")
+
+package(default_visibility = ["//visibility:public"])
+
+# Minimal RV64 NOEL-V boot stub for the OpenSBI bring-up simulation: jumps
+# straight to the pre-loaded OpenSBI payload at 0x40000 (no UART, no delays).
+# See //boards/noelv/tool.vivado:opensbi_trace.
+genrule(
+    name = "bin_raw",
+    srcs = ["main.S"],
+    outs = ["noelv_sim_boot.elf"],
+    cmd = "$(execpath @riscv_none_elf//:gcc) -march=rv64im -mabi=lp64 -nostartfiles -nostdlib " +
+          "-Wl,--section-start=.text=0x0 -o $@ $<",
+    tools = ["@riscv_none_elf//:gcc"],
+)
+
+bin_file(
+    name = "bin",
+    srcs = [":bin_raw"],
+)
+
+disasm_file(
+    name = "disasm",
+    srcs = [":bin_raw"],
+)
+
+memh_file(
+    name = "memh",
+    srcs = [":bin"],
+)

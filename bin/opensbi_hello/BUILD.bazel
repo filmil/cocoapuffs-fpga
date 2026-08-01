@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: Apache-2.0
+
+package(default_visibility = ["//visibility:public"])
+
+# Minimal RV64 "hello world" program built as a flat binary, used as the
+# next-stage payload of //boards/noelv:opensbi_fw_hello. Position-independent;
+# _start is at offset 0 where OpenSBI hands off.
+genrule(
+    name = "elf",
+    srcs = ["main.S"],
+    outs = ["opensbi_hello.elf"],
+    cmd = "$(execpath @riscv_none_elf//:gcc) -march=rv64im -mabi=lp64 " +
+          "-nostartfiles -nostdlib -Wl,--section-start=.text=0x0 -o $@ $<",
+    tools = ["@riscv_none_elf//:gcc"],
+)
+
+# Flat binary (OpenSBI fw_payload embeds the raw payload bytes).
+genrule(
+    name = "bin",
+    srcs = [":elf"],
+    outs = ["opensbi_hello.bin"],
+    cmd = "$(execpath @riscv_none_elf//:objcopy) -O binary $< $@",
+    tools = ["@riscv_none_elf//:objcopy"],
+)

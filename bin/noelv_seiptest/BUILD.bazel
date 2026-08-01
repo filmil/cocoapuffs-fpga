@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: Apache-2.0
+load("//third_party/riscv32_toolchain:macros.bzl", "bin_file", "disasm_file", "memh_file")
+
+package(default_visibility = ["//visibility:public"])
+
+# Core-level NVC-sim test of APBUART (PLIC source 1) interrupt delivery to the
+# NOEL-V hart: M-timer, M-external and S-external interrupts.  Linked at the
+# boot-BRAM reset address 0xC0000000 so it runs directly from reset (no OpenSBI).
+# Driven by //boards/noelv/tool.nvc/boot:seiptest_nvc.
+genrule(
+    name = "bin_raw",
+    srcs = ["main.S"],
+    outs = ["noelv_seiptest.elf"],
+    cmd = "$(execpath @riscv_none_elf//:gcc) -march=rv64ima_zicsr -mabi=lp64 -nostartfiles -nostdlib " +
+          "-Wl,--section-start=.text=0xC0000000 -o $@ $<",
+    tools = ["@riscv_none_elf//:gcc"],
+)
+
+bin_file(
+    name = "bin",
+    srcs = [":bin_raw"],
+)
+
+disasm_file(
+    name = "disasm",
+    srcs = [":bin_raw"],
+)
+
+memh_file(
+    name = "memh",
+    srcs = [":bin"],
+)
