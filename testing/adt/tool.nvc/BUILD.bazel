@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+load(
+    "@rules_nvc//build/nvc:rules.bzl",
+    "vhdl_library",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+vhdl_library(
+    name = "adt",
+    srcs = ["//testing/adt:srcs"],
+    standard = "2008",
+)

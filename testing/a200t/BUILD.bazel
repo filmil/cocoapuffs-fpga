@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: Apache-2.0
+load(
+    "@rules_vivado//build/vivado:rules.bzl",
+    "vivado_library",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["a200t_ddr3_stub.vhdl"])
+
+vivado_library(
+    name = "micron_ddr3_chip",
+    standard = "2008",
+    srcs = [
+        "//third_party/uberddr3:micron_ddr3_model",
+    ],
+    hdrs = [
+        "//third_party/uberddr3:testbench_4096m",
+    ],
+    defines = {
+        # x16 chips.
+        "TWO_LANES_x8": "",
+        # 4GBit modules.
+        "den4096Mb": "",
+        # The -125 speed grade (1600MT/s)
+        "sg125": "",
+        #"DEBUG": "1",
+    },
+    includes = [
+        "//third_party/uberddr3",
+    ],
+    deps = [
+        "//third_party/xilinx:glbl",
+        "//third_party/xilinx:unisims",
+    ],
+)
+
+vivado_library(
+    name = "a200t_ddr3",
+    standard = "2008",
+    srcs = [
+        "a200t_ddr3.sv",
+    ],
+    deps = [
+        ":micron_ddr3_chip",
+        "//third_party/xilinx:glbl",
+        "//third_party/xilinx:unisims",
+    ],
+)
+
+filegroup(
+    name = "a200t_clk_srcs",
+    srcs = [
+        "a200t_clk.vhdl",
+    ],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_lib_a200t_clk",
+    ],
+)
+
+# Clock generator peripheral.
+vivado_library(
+    name = "a200t_clk",
+    standard = "2008",
+    srcs = [
+        ":a200t_clk_srcs",
+    ],
+    deps = [
+        "//third_party/xilinx:glbl",
+        "//third_party/xilinx:unisim",
+    ],
+)

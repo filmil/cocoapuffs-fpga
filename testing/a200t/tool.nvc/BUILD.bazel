@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: Apache-2.0
+load(
+    "@rules_nvc//build/nvc:rules.bzl",
+    "vhdl_library",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+vhdl_library(
+    name = "a200t_clk",
+    srcs = ["//testing/a200t:a200t_clk_srcs"],
+    standard = "2008",
+)
+
+vhdl_library(
+    name = "a200t_ddr3",
+    srcs = ["//testing/a200t:a200t_ddr3_stub.vhdl"],
+    standard = "2008",
+)

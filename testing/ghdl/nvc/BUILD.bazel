@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+# See LICENSE file.
+load(
+    "@rules_nvc//build/nvc:rules.bzl",
+    "vhdl_elaborate",
+    "vhdl_library",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+vhdl_library(
+    name = "top",
+    standard = "2008",
+    srcs = ["//testing/ghdl:srcs"],
+)
+
+vhdl_elaborate(
+    name = "top_entity",
+    library = ":top",
+    standard = "2008",
+)

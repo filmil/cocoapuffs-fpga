@@ -1,0 +1,26 @@
+# See LICENSE file.
+load(
+    "@rules_nvc//build/nvc:rules.bzl",
+    "vhdl_elaborate",
+    "vhdl_library",
+    "vhdl_run",
+    "vhdl_test",
+    "wave_view",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+vhdl_library(
+    name = "testing",
+    srcs = ["//testing:srcs"],
+    #standard = "2008",
+    # do not sort
+    deps = [
+        "//ip/axi/tool.nvc:axi",
+        "//ip/tl/tool.nvc:tl",
+        "//ip/wb/tool.nvc:wb",
+        "@rules_osvvm//tool.nvc:osvvm",
+        "@rules_vunit//tool.nvc:vunit_lib",
+    ],
+    standard = "2008",
+)

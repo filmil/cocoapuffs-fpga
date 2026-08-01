@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_ghdl//:rules.bzl", "ghdl_library", "ghdl_verilog")
+
+filegroup(
+    name = "srcs",
+    # do not sort
+    srcs = [
+        "try.vhdl",
+        "top.vhdl",
+    ],
+    visibility = [
+        "//visibility:public",
+    ],
+)
+
+ghdl_library(
+    name = "top",
+    # do not sort
+    srcs = [
+        ":srcs",
+    ],
+)
+
+ghdl_verilog(
+    name = "top_v",
+    lib = ":top",
+    unit = "top_entity",
+)

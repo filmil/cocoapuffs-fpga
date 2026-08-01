@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+# See LICENSE file.
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "srcs",
+    srcs = [
+        # This is for when we don't want it all.
+        "fake_unisim.pkg.vhdl",
+    ],
+)

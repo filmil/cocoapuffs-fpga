@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_ghdl//:rules.bzl", "ghdl_library", "ghdl_verilog")
+
+# See LICENSE file.
+load("@rules_nvc//build/nvc:rules.bzl", "vhdl_library")
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "srcs_no_vunit",
+    srcs = [
+        "asserts.pkg.vhdl",
+        "clkgen.vhdl",
+        "spi.pkg.vhdl",
+        "uart.pkg.vhdl",
+        "wb_tb.pkg.vhdl",
+    ],
+)
+
+filegroup(
+    name = "srcs",
+    # do not sort.
+    srcs = [
+        "asserts.pkg.vhdl",
+        "clkgen.vhdl",
+        "spi.pkg.vhdl",
+        "uart.pkg.vhdl",
+        "wb_tb.pkg.vhdl",
+        "wblite_pkg.pkg.vhdl",
+        "wblite.ent.vhdl",
+        "wblite_mem.ent.vhdl",
+        "sdcard_wblite_pkg.pkg.vhdl",
+        "tllite_pkg.pkg.vhdl",
+        "tllite.ent.vhdl",
+        "tllite_mem.ent.vhdl",
+        "tl_uh_pkg.pkg.vhdl",
+        "tl_uh_master.ent.vhdl",
+        "tl_c_pkg.pkg.vhdl",
+        "tl_c_master.ent.vhdl",
+    ],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_lib_testing",
+    ],
+)
+
+ghdl_library(
+    name = "testing_ghdl",
+    srcs = [
+        ":srcs_no_vunit",
+    ],
+    library_name = "testing",
+    deps = [
+        "//ip/tl/tool.ghdl:tl",
+        "//ip/wb/tool.ghdl:wb",
+    ],
+)

@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_nvc//build/nvc:rules.bzl", "vhdl_test")
+
+# See LICENSE file.
+package(default_visibility = ["//visibility:public"])
+
+#vhdl_test(
+#name = "fail",
+#srcs = [
+#"fail.test.vhdl",
+#],
+#deps = [
+#"//ip/wb_uart/nvc:wb_uart",
+#"//ip/wb/tool.nvc:wb",
+#"//testing",
+#],
+#args = [
+#"--dump-arrays", # Include contents of arrays. May get slow.
+#],
+#tags = [
+#"manual",
+#],
+#)
+
+vhdl_test(
+    name = "pass",
+    standard = "2008",
+    srcs = [
+        "pass.test.vhdl",
+    ],
+    args = [
+        "--dump-arrays",  # Include contents of arrays. May get slow.
+    ],
+    deps = [
+        "//ip/wb/tool.nvc:wb",
+        "//ip/wb_uart/nvc:wb_uart",
+        "//testing",
+    ],
+)
