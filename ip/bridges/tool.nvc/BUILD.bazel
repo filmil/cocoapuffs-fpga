@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: Apache-2.0
+load(
+    "@rules_nvc//build/nvc:rules.bzl",
+    "vhdl_library",
+    "vhdl_test",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+vhdl_library(
+    name = "bridges",
+    srcs = ["//ip/bridges"],
+    deps = [
+        "//:gaisler",
+        "//:grlib",
+        "//ip/wb/tool.nvc:wb",
+    ],
+    standard = "2008",
+)
+
+vhdl_test(
+    name = "ahb2wb_bridge_test",
+    srcs = ["//ip/bridges:ahb2wb_bridge_test"],
+    entity = "ahb2wb_bridge_tb",
+    deps = [
+        ":bridges",
+        "//:gaisler",
+        "//:grlib",
+        "//ip/wb/tool.nvc:wb",
+    ],
+    standard = "2008",
+)
+
+# Full-blown 256-word memory sweep through the bridge (word + per-byte +
+# halfword write-all/read-all).  Intended as the comprehensive on-demand test.
+# NOTE: it should be tagged "manual" to keep it out of wildcard runs, but the
+# rules_nvc vhdl_test macro does not yet forward `tags` (a fix is staged in
+# //third_party/rules_nvc:support_test_tags.patch for upstream merge).  It is
+# fast (~sub-second), so running it by default is harmless for now.
+vhdl_test(
+    name = "ahb2wb_bridge_memtest",
+    srcs = ["//ip/bridges:ahb2wb_bridge_memtest_test"],
+    entity = "ahb2wb_bridge_memtest_tb",
+    deps = [
+        ":bridges",
+        "//:gaisler",
+        "//:grlib",
+        "//ip/wb/tool.nvc:wb",
+    ],
+    standard = "2008",
+)
+
+vhdl_test(
+    name = "ahb_bram_test",
+    srcs = ["//ip/bridges:ahb_bram_test"],
+    entity = "tb_ahb_bram",
+    deps = [
+        ":bridges",
+        "//:gaisler",
+        "//:grlib",
+        "@rules_vunit//tool.nvc:vunit_lib",
+    ],
+    standard = "2008",
+    # Large behavioral memory folds at elaboration + allocates at run; raise the
+    # NVC heaps (needs rules_nvc feat-elaborate-heap; run gets it via args).
+    heap_size = "4g",
+    unit_heap_size = "4g",
+    args = ["-H4g", "-M4g"],
+)

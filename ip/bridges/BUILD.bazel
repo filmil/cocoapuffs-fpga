@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: Apache-2.0
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "dummy_sim_pkg.vhdl",
+    "dummy_testlib_pkg.vhdl",
+])
+
+filegroup(
+    name = "bridges",
+    # do not sort
+    srcs = [
+        "ahb_bram.vhdl",
+        "ahb2wb_bridge.vhdl",
+        "ahb2wb_bridge.test.vhdl",
+    ],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_lib_bridges",
+    ],
+)
+
+filegroup(
+    name = "ahb2wb_bridge_test",
+    srcs = [
+        "ahb2wb_bridge.test.vhdl",
+    ],
+)
+
+filegroup(
+    name = "ahb2wb_bridge_memtest_test",
+    srcs = [
+        "ahb2wb_bridge_memtest.test.vhdl",
+    ],
+)
+
+filegroup(
+    name = "ahb_bram_test",
+    srcs = [
+        "ahb_bram.test.vhdl",
+    ],
+)

@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: Apache-2.0
+load(
+    "@rules_nvc//build/nvc:rules.bzl",
+    "vhdl_elaborate",
+    "vhdl_library",
+    "vhdl_run",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+vhdl_library(
+    name = "axi",
+    standard = "2008",
+    srcs = [
+        "//ip/axi:axi_srcs",
+    ],
+)

@@ -1,0 +1,624 @@
+# SPDX-License-Identifier: Apache-2.0
+load(
+    "@rules_vivado//build/vivado:rules.bzl",
+    "vivado_library",
+    "vivado_test",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+# Initialize all registers at reset (grlib_sync_reset_enable_all = 1) so the core
+# comes up with defined state in simulation instead of X.  HP (ASIC) uses minimal
+# reset to save area, leaving most regs X in sim; the FPGA flow enables full sync
+# reset.  Swapped into grlib_sim in place of the stock config_vhd_file.
+genrule(
+    name = "config_simreset",
+    srcs = ["@grlib//third_party/grlib:config_vhd_file"],
+    outs = ["config_simreset.vhd"],
+    cmd = "sed 's/4 => 0, -- grlib_sync_reset_enable_all/4 => 1, -- grlib_sync_reset_enable_all/' $(SRCS) > $@",
+)
+
+# Relax the boot-time "X in data going to cache" guard (iunv.vhd) -- the uninit
+# regfile makes an early speculative store carry X operands; the store is squashed,
+# so demote the assertion failure -> note so the sim runs and we can observe the
+# real (defined) stores.  Sim-only; no effect on synthesis.
+# ALSO: rename the `vmode` identifier (trigger_textra_match, grlib 2025.2-b4298)
+# to vmode_in -- Vivado's VHDL parser treats `vmode` as a reserved word and
+# errors "syntax error near 'vmode'" (xvhdl + synth alike).  Rename is safe:
+# `vmode` appears ONLY in iunv.vhd in all of grlib.
+# ALSO: initialize the register record to RRES (`signal r, rin : registers :=
+# RRES`).  In RTL sim r.csr.pmp_precalc powers up U and the sync reset never
+# cleanses it (proven by the smode_csr_xdump record dump, 2026-07-04): with
+# precalc.valid=U NO PMP entry matches, and RISC-V denies S/U accesses without
+# a match -> every S-mode ifetch faults (mcause=1) while M-mode runs -> the
+# OpenSBI->shim handoff trap-loops in sim only.  On HW the GSR initializes the
+# FFs (and synthesis maps initializers to FF INIT = the reset value), so this
+# is hardware-faithful.
+# ALSO: recompute csr_mmu.precalc combinationally from the ARCHITECTURAL
+# pmpaddr/pmpcfg registers instead of forwarding r.csr.pmp_precalc.  Even with
+# the RRES init, the first post-reset cycles write U into precalc entries 0-3
+# (an early-pipeline speculative CSR-write seeded by the uninitialized BTB;
+# time-series-proven: rin.csr.pmp_precalc is U at 106 ns from a defined r) and
+# the clean bulk recompute never lands afterwards.  The precalc register is by
+# design just a pipelined copy of pmp_precalc(pmpaddr, pmpcfg), so sourcing the
+# MMU/cctrl copy from the (defined) architectural registers is HW-equivalent
+# and immune to the sim-X, whatever writes the register copy.  Sim-only build.
+genrule(
+    name = "iunv_relaxed",
+    srcs = ["@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/iunv.vhd"],
+    outs = ["iunv_relaxed.vhd"],
+    cmd = "sed -e '/X in data going to cache/s/severity failure/severity note/' " +
+          "-e 's/\\bvmode\\b/vmode_in/g' " +
+          "-e 's/signal r, rin         : registers;/signal r, rin : registers := RRES;/' " +
+          # X-robust pmpaddr write gate: the pmpcfg L bit reads U in the early-
+          # poisoned entries, and `U = '0'` is false -> csrw pmpaddr silently
+          # DROPPED (OpenSBI programs addr-then-cfg, so its PMP setup loses the
+          # addresses; proven 2026-07-04: r.csr.pmpaddr(0)=0 after the write,
+          # precalc = NAPOT-of-zero, S-fetch no-hit denied).  `/= '1'` is
+          # identical for defined values and proceeds on the sim-only U.
+          "-e \"s/pmp_locked(csr, csra_ilo) = '0' and/pmp_locked(csr, csra_ilo) \\/= '1' and/\" $(SRCS) " +
+          "| python3 -c \"import sys; s = sys.stdin.read(); s = s.replace('  csr_mmu.precalc        <= r.csr.pmp_precalc;', '''  precalc_scrub : process (r)\\n    variable pc_v : pmp_precalc_vec(0 to PMPENTRIES - 1);\\n  begin\\n    pmp_precalc(r.csr.pmpaddr, r.csr.pmpcfg, pc_v,\\n                pmp_entries, pmp_no_tor, pmp_g, physaddr - 1);\\n    csr_mmu.precalc <= pc_v;\\n  end process;'''); s = s.replace('                csr.pmpaddr(csra_ilo) := (others =>', '-- pragma translate_off' + chr(10) + '                report ' + chr(34) + 'PMPW arm hit' + chr(34) + ' severity note;' + chr(10) + '-- pragma translate_on' + chr(10) + '                csr.pmpaddr(csra_ilo) := (others =>');" +
+          # FIX (xsim -O0 record corruption, proven by tracer bisection 2026-07-05):
+          # (a) tie_csrs's INOUT copy-back garbles v.csr.pmpaddr(0) every cycle
+          #     (the body never touches pmpaddr) -> save/restore around the call;
+          # (b) the pmpcfg SLICE tie's nested aggregate stomps the neighboring
+          #     pmpaddr(0) field -> rewrite the three slice-ties as an indexed
+          #     loop (no slice aggregates).  Both HW-equivalent.
+          "s = s.replace('    variable wb_csr             : csr_reg_type;', '    variable wb_csr             : csr_reg_type;' + chr(10) + '    variable pmpaddr_keep_v     : gaisler.noelvint.pmpaddr_vec_type;');" +
+          "s = s.replace('    tie_csrs(active_extensions, pmp_entries, pma_entries, pma_masked, perf_cnts, perf_bits, mmuen, v.csr);', '    pmpaddr_keep_v := v.csr.pmpaddr;' + chr(10) + '    tie_csrs(active_extensions, pmp_entries, pma_entries, pma_masked, perf_cnts, perf_bits, mmuen, v.csr);' + chr(10) + '    v.csr.pmpaddr := pmpaddr_keep_v;');" +
+          "s = s.replace('      v.csr.pmpcfg(pmp_entries to PMPENTRIES - 1)      := (others => (others => ' + chr(39) + '0' + chr(39) + '));', '      for pmpi_v in pmp_entries to PMPENTRIES - 1 loop' + chr(10) + '        v.csr.pmpcfg(pmpi_v)  := (others => ' + chr(39) + '0' + chr(39) + ');' + chr(10) + '      end loop;');" +
+          "s = s.replace('      v.csr.pmpaddr(pmp_entries to PMPENTRIES - 1)     := (others => pmpaddrzero);', '      for pmpj_v in pmp_entries to PMPENTRIES - 1 loop' + chr(10) + '        v.csr.pmpaddr(pmpj_v) := pmpaddrzero;' + chr(10) + '      end loop;');" +
+          "s = s.replace('      v.csr.pmp_precalc(pmp_entries to PMPENTRIES - 1) := (others => pmp_precalc_none);', '      for pmpk_v in pmp_entries to PMPENTRIES - 1 loop' + chr(10) + '        v.csr.pmp_precalc(pmpk_v) := pmp_precalc_none;' + chr(10) + '      end loop;'); sys.stdout.write(s)\" > $@",
+)
+
+# Synthesis variant of iunv.  The ONLY transform the hardware build needs is the
+# `vmode` -> `vmode_in` rename: Vivado's VHDL parser treats `vmode` as a reserved
+# word and errors "syntax error near 'vmode'" (xvhdl + synth alike); `vmode`
+# appears ONLY in iunv.vhd in all of grlib, so the rename is safe.  Everything
+# else in :iunv_relaxed is SIM-ONLY X-robustness -- in particular `precalc_scrub`
+# REMOVES a pipeline timing register (csr_mmu.precalc reg -> a combinational
+# recompute), which must NOT reach a bitstream.  So the synth `gaisler` library
+# consumes this minimal variant while only the sim libraries take the full
+# :iunv_relaxed stack.
+genrule(
+    name = "iunv_synth",
+    srcs = ["@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/iunv.vhd"],
+    outs = ["iunv_synth.vhd"],
+    cmd = "sed -e 's/\\bvmode\\b/vmode_in/g' $(SRCS) > $@",
+)
+
+# stdio for the Vivado synth: comment out ALL of grlib stdio's HRead/HWrite/Write
+# decls + bodies (the ranges bazel_grlib's patch_vhdl_2008.py targets) with NO
+# aliases.  A Vivado update added HRead/HWrite/Write for std_(u)logic_vector to its
+# std_logic_textio, colliding with grlib's -- a homograph plus a "multiple use
+# clause" ambiguity that cascades through dma2ahb_tp, testlib, the disassemblers.
+# Stripping grlib's lets every caller resolve to the std lib.  bazel_grlib's
+# stdio_2008 aliases instead -- fine for NVC/2008, but Vivado synth's reader can't
+# resolve the alias signatures (they need std.textio.Line).  Ranges target
+# grlib-gpl-2025.2-b4298.  TODO: upstream a "strip" mode to patch_vhdl_2008.py.
+genrule(
+    name = "stdio_93",
+    srcs = ["@@grlib++http_archive+grlib_srcs//:lib/grlib/stdlib/stdio.vhd"],
+    outs = ["stdio_93.vhd"],
+    cmd = "sed '39,42s/^/-- /;44,46s/^/-- /;48,50s/^/-- /;52,55s/^/-- /;57,59s/^/-- /;61,65s/^/-- /;67,71s/^/-- /;73,77s/^/-- /;141,191s/^/-- /;193,201s/^/-- /;203,213s/^/-- /;215,223s/^/-- /;225,235s/^/-- /;237,260s/^/-- /;262,269s/^/-- /;271,281s/^/-- /' $(SRCS) > $@",
+)
+
+vivado_library(
+    name = "grlib",
+    vhdl1993 = True,
+    srcs = [
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/stdlib/version.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/stdlib/config_types.vhd",
+        # EXPERIMENT (2026-07-08, LR/SC root-cause): synthesize with
+        # grlib_sync_reset_enable_all=1 (the config every PASSING sim uses)
+        # instead of the stock minimal-reset config.  sc-to-DDR3 fails 0/N on
+        # HW at both 40 and 24 MHz while all RTL sims pass -- the reset-config
+        # split between sim and synth is the prime remaining suspect (busif5x
+        # lr_valid / cctrl amo state under minimal reset).  If this fixes sc on
+        # HW, keep it (FPGA flows commonly enable full sync reset) -- else
+        # revert to "@grlib//third_party/grlib:config_vhd_file".
+        ":config_simreset",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/stdlib/stdlib.vhd",
+        # stdio_93: remove only stdio's Std_Logic_Vector HRead/HWrite that collide
+        # with the newer Vivado std lib.  The alias variant (stdio_2008) worked
+        # until a Vivado update, but Vivado synth's reader can no longer resolve
+        # the alias signatures (std.textio.Line), so we strip instead of alias.
+        ":stdio_93",
+        "@grlib//third_party/grlib:testlib_2008",
+        "//ip/bridges:dummy_testlib_pkg.vhdl",
+    ] + [
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/util/util.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/sparc/sparc.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/sparc/sparc_disas.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/riscv/riscv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/riscv/riscv_disas.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/riscv/cpu_disas.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/modgen/multlib.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/modgen/leaves.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/amba.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/devices.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/defmst.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/apbctrl.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/apbctrlx.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/apbctrlsp.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/apbctrldp.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/apbctrl3p.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/apbctrl4p.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/ahbctrl.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/dma2ahb_pkg.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/dma2ahb.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/ahbmst.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/ahblitm2ahbm.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/dma2ahb_tp.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/amba_tp.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/dftlib/dftlib.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/dftlib/trstmux.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/dftlib/synciotest.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/generic_bm/generic_bm_pkg.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/generic_bm/ahb_be.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/generic_bm/axi4_be.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/generic_bm/bmahbmst.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/generic_bm/bm_fre.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/generic_bm/bm_me_rc.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/generic_bm/bm_me_wc.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/generic_bm/fifo_control_rc.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/generic_bm/fifo_control_wc.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/generic_bm/generic_bm_ahb.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/generic_bm/generic_bm_axi.vhd",
+    ],
+)
+
+vivado_library(
+    name = "gaisler",
+    vhdl1993 = True,
+    srcs = [
+        "//ip/bridges:dummy_sim_pkg.vhdl",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/pkg/noelv_cfg_64.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/arith/arith.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/arith/mul32.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/arith/div32.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/misc/misc.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/misc/rstgen.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/misc/gptimer.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/plic/plic.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/plic/grplic.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/plic/plic_encoder.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/plic/plic_gateway.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/plic/plic_target.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/plic/grplic_ahb.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/aplic/aplic.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/aplic/graplic_ahb.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/aplic/aplic_encoder.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/busif5_types.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/l5nv_shared.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/dmnv_ic_dmaport.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/dmnv_ic_busport.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/dmnv_ic_ebp.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/dmnv_ic.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/dmnv_ahbs.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/tbufmemnv_mbus.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/dmnv_trace.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/dmnv_trace_ahb.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/dmnv_reg_step.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/l5tsc.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/busif5x.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/busif5rdb.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/busif5.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/tcmwrap5.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/cachemem5.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/snoopmem5.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/uart/uart.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/uart/apbuart.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/uart/apbuart_16550.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/pkg/noelv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/pkg/noelv_cpu_cfg.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/pkg/nvnlconfig.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/utilnv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/noelvtypes.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/noelvint.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/nvsupport.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/mmuconfig.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/bhtnv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/btbnv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/btbdmnv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/rasnv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/tbufmemnv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/fputilnv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/mul64.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/div64.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/regfile64sramnv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/regfile64dffnv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/alunv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/rvvi.vhd",
+        ":iunv_synth",  # synth: vmode rename ONLY (sim X-robustness stays in :iunv_relaxed)
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/itracenv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/cctrl5nv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/mulfp.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/nanofpunv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/cpucorenvbc.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/cpucorenvb.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/cpucorenv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/interrupt_file.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/imsic_int_files.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/fpsimutilnv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/kanatalog.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/subsys/noelvcpu.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/subsys/dummy_pnp.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/subsys/noelvcfgmap.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/subsys/noelvsys.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/aclint/clint.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/aclint/clint_ahb.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/aclint/aclint_ahb.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/imsic/imsic_ahb.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/dm/dmnvint.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/dm/progbuf.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/dm/dmnvx.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/dm/dmnv.vhd",
+        # JTAG debug components for the grmon AHB master (ahbjtag).  Packages
+        # first (jtag, libjtagcom), then the JTAG<->AHB cores and ahbjtag itself.
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/jtag/jtag.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/jtag/libjtagcom.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/jtag/jtagcom.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/jtag/jtagcom2.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/jtag/ahbjtag.vhd",
+    ],
+    deps = [
+        ":eth",
+        ":grlib",
+        ":opencores",
+        ":techmap",
+    ],
+)
+
+vivado_library(
+    name = "gaisler_sim_custom",
+    library_name = "gaisler",
+    standard = "2008",
+    srcs = [
+        "//ip/bridges:dummy_sim_pkg.vhdl",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/pkg/noelv_cfg_64.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/arith/arith.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/arith/mul32.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/arith/div32.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/misc/misc.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/misc/rstgen.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/misc/gptimer.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/plic/plic.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/plic/grplic.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/plic/plic_encoder.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/plic/plic_gateway.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/plic/plic_target.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/plic/grplic_ahb.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/aplic/aplic.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/aplic/graplic_ahb.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/aplic/aplic_encoder.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/busif5_types.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/l5nv_shared.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/dmnv_ic_dmaport.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/dmnv_ic_busport.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/dmnv_ic_ebp.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/dmnv_ic.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/dmnv_ahbs.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/tbufmemnv_mbus.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/dmnv_trace.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/dmnv_trace_ahb.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/dmnv_reg_step.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/l5tsc.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/busif5x.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/busif5rdb.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/busif5.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/tcmwrap5.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/cachemem5.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/l5nv/shared/snoopmem5.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/uart/uart.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/uart/apbuart.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/uart/apbuart_16550.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/pkg/noelv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/pkg/noelv_cpu_cfg.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/pkg/nvnlconfig.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/utilnv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/noelvtypes.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/noelvint.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/nvsupport.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/mmuconfig.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/bhtnv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/btbnv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/btbdmnv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/rasnv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/tbufmemnv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/fputilnv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/mul64.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/div64.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/regfile64sramnv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/regfile64dffnv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/alunv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/rvvi.vhd",
+        ":iunv_relaxed",  # boot-time X-in-data guard demoted failure->note
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/itracenv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/cctrl5nv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/mulfp.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/nanofpunv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/cpucorenvbc.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/cpucorenvb.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/cpucorenv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/interrupt_file.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/imsic_int_files.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/fpsimutilnv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/core/kanatalog.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/subsys/noelvcpu.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/subsys/dummy_pnp.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/subsys/noelvcfgmap.vhd",
+        "//third_party/grlib:noelvsys.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/aclint/clint.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/aclint/clint_ahb.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/aclint/aclint_ahb.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/imsic/imsic_ahb.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/dm/dmnvint.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/dm/progbuf.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/dm/dmnvx.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/dm/dmnv.vhd",
+        # JTAG debug components for the grmon AHB master (ahbjtag) -- mirror the synth
+        # gaisler lib so board.arch_rtl's ahbjtag0 compiles in sim too.
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/jtag/jtag.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/jtag/libjtagcom.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/jtag/jtagcom.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/jtag/jtagcom2.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/jtag/ahbjtag.vhd",
+    ],
+    deps = [
+        ":eth_sim",
+        ":grlib_sim",
+        ":opencores_sim",
+        ":techmap_sim",
+    ],
+)
+
+vivado_library(
+    name = "techmap",
+    vhdl1993 = True,
+    srcs = [
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/gencomp/gencomp.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/gencomp/netcomp.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/maps/memrwcol.vhd",
+        "@@grlib++http_archive+grlib_srcs//:techmap_files",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/maps/syncram.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/maps/syncram_2p.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/maps/syncram_2pbw.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/maps/syncram64.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/maps/syncramlb.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/maps/techmult.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/unisim/memory_unisim.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/unisim/ddr_unisim.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/unisim/clkgen_unisim.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/unisim/pads_unisim.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/unisim/mul_unisim.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/unisim/tap_unisim.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/unisim/buffer_unisim.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/unisim/sysmon_unisim.vhd",
+        # JTAG tap wrapper (selects the BSCANE2-based tap_unisim for artix7) --
+        # needed by gaisler.ahbjtag for the grmon debug AHB master.
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/maps/tap.vhd",
+        # Gate primitives ahbjtag instantiates directly (grnand2/grdff inside
+        # jtagcom, techbuf for the tck clock buffer).  Without these the cells
+        # synth as black boxes and opt_design fails (DRC INBB-3).
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/maps/grgates.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/maps/techbuf.vhd",
+    ],
+    deps = [
+        ":grlib",
+        "//third_party/xilinx:unisim",
+    ],
+)
+
+vivado_library(
+    name = "eth",
+    vhdl1993 = True,
+    srcs = ["@@grlib++http_archive+grlib_srcs//:eth_files"],
+    deps = [
+        ":grlib",
+        ":techmap",
+    ],
+)
+
+vivado_library(
+    name = "opencores",
+    vhdl1993 = True,
+    srcs = ["@@grlib++http_archive+grlib_srcs//:opencores_files"],
+    deps = [
+        ":grlib",
+    ],
+)
+
+vivado_library(
+    name = "bridges",
+    vhdl1993 = True,
+    srcs = [
+        "//ip/bridges",
+    ],
+    deps = [
+        ":gaisler",
+        ":grlib",
+        "//ip/wb/tool.vivado:wb",
+        "//third_party/xilinx:unisim",
+    ],
+)
+
+# --- Simulation specific VHDL-2008 targets ---
+
+vivado_library(
+    name = "grlib_sim",
+    library_name = "grlib",
+    standard = "2008",
+    srcs = [
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/stdlib/version.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/stdlib/config_types.vhd",
+        ":config_simreset",  # grlib_sync_reset_enable_all=1 (init regs in sim)
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/stdlib/stdlib.vhd",
+        "@grlib//third_party/grlib:stdio_2008",
+        "@grlib//third_party/grlib:testlib_2008",
+    ] + [
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/util/util.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/sparc/sparc.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/sparc/sparc_disas.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/riscv/riscv.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/riscv/riscv_disas.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/riscv/cpu_disas.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/modgen/multlib.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/modgen/leaves.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/amba.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/devices.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/defmst.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/apbctrl.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/apbctrlx.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/apbctrlsp.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/apbctrldp.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/apbctrl3p.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/apbctrl4p.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/ahbctrl.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/dma2ahb_pkg.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/dma2ahb.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/ahbmst.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/ahblitm2ahbm.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/dma2ahb_tp.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/amba/amba_tp.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/dftlib/dftlib.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/dftlib/trstmux.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/dftlib/synciotest.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/generic_bm/generic_bm_pkg.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/generic_bm/ahb_be.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/generic_bm/axi4_be.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/generic_bm/bmahbmst.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/generic_bm/bm_fre.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/generic_bm/bm_me_rc.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/generic_bm/bm_me_wc.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/generic_bm/fifo_control_rc.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/generic_bm/fifo_control_wc.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/generic_bm/generic_bm_ahb.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/grlib/generic_bm/generic_bm_axi.vhd",
+    ],
+)
+
+vivado_library(
+    name = "gaisler_sim",
+    library_name = "gaisler",
+    standard = "2008",
+    srcs = [
+        "@@grlib++http_archive+grlib_srcs//:gaisler_files",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/dm/dmnvint.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/dm/progbuf.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/dm/dmnvx.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/noelv/dm/dmnv.vhd",
+        # JTAG debug components for the grmon AHB master (ahbjtag) -- mirror the synth
+        # gaisler lib so board.arch_rtl's ahbjtag0 compiles in sim too.
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/jtag/jtag.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/jtag/libjtagcom.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/jtag/jtagcom.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/jtag/jtagcom2.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/gaisler/jtag/ahbjtag.vhd",
+    ],
+    deps = [
+        ":eth_sim",
+        ":grlib_sim",
+        ":opencores_sim",
+        ":techmap_sim",
+    ],
+)
+
+vivado_library(
+    name = "techmap_sim",
+    library_name = "techmap",
+    standard = "2008",
+    srcs = [
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/gencomp/gencomp.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/gencomp/netcomp.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/maps/memrwcol.vhd",
+        "@@grlib++http_archive+grlib_srcs//:techmap_files",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/maps/syncram.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/maps/syncram_2p.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/maps/syncram_2pbw.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/maps/syncram64.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/maps/syncramlb.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/maps/techmult.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/unisim/memory_unisim.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/unisim/ddr_unisim.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/unisim/clkgen_unisim.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/unisim/pads_unisim.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/unisim/mul_unisim.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/unisim/tap_unisim.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/unisim/buffer_unisim.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/unisim/sysmon_unisim.vhd",
+        # JTAG tap wrapper + gate primitives that gaisler.ahbjtag instantiates.
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/maps/tap.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/maps/grgates.vhd",
+        "@@grlib++http_archive+grlib_srcs//:lib/techmap/maps/techbuf.vhd",
+    ],
+    deps = [
+        ":grlib_sim",
+        "//third_party/xilinx:unisim",
+    ],
+)
+
+vivado_library(
+    name = "eth_sim",
+    library_name = "eth",
+    standard = "2008",
+    srcs = ["@@grlib++http_archive+grlib_srcs//:eth_files"],
+    deps = [
+        ":grlib_sim",
+        ":techmap_sim",
+    ],
+)
+
+vivado_library(
+    name = "opencores_sim",
+    library_name = "opencores",
+    standard = "2008",
+    srcs = ["@@grlib++http_archive+grlib_srcs//:opencores_files"],
+    deps = [
+        ":grlib_sim",
+    ],
+)
+
+vivado_library(
+    name = "bridges_sim",
+    library_name = "bridges",
+    standard = "2008",
+    srcs = [
+        "//ip/bridges",
+    ],
+    deps = [
+        ":gaisler_sim_custom",
+        ":grlib_sim",
+        "//ip/wb/tool.vivado:wb",
+        "//third_party/xilinx:unisim",
+    ],
+)
+
+# VUnit testbench for the direct AHB-slave BRAM (bridges.ahb_bram).
+vivado_library(
+    name = "ahb_bram_test_lib",
+    standard = "2008",
+    srcs = [
+        "//ip/bridges:ahb_bram_test",
+    ],
+    deps = [
+        ":bridges_sim",
+        ":grlib_sim",
+        "//third_party/vunit/tool.vivado:vunit_lib",
+    ],
+)
+
+vivado_test(
+    name = "ahb_bram_test",
+    library = ":ahb_bram_test_lib",
+    timeout = "short",
+    top = "tb_ahb_bram",
+    xelab_args = [
+        "-mt",
+        "off",
+        "-debug",
+        "typical",
+        "-O0",
+    ],
+    xelab_relaxed = True,
+)

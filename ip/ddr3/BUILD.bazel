@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: Apache-2.0
+load(
+    "@rules_vivado//build/vivado:rules.bzl",
+    "vivado_library",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "srcs",
+    srcs = [
+        "cfg.pkg.vhdl",
+        "dfi.pkg.vhdl",
+        "dfi32.pkg.vhdl",
+        "phy.pkg.vhdl",
+        "phy16.pkg.vhdl",
+        "phy32.pkg.vhdl",
+    ],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_lib_ddr3",
+    ],
+)
+
+vivado_library(
+    name = "ddr3",
+    standard = "2008",
+    srcs = [
+        ":srcs",
+    ],
+    deps = [
+        "//third_party/xilinx:glbl",
+        "//third_party/xilinx:unisims",
+    ],
+)

@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: Apache-2.0
+load(
+    "@rules_vivado//build/vivado:rules.bzl",
+    "vivado_library",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "axi_srcs",
+    # do not sort
+    srcs = [
+        "types.pkg.vhdl",
+        "host.pkg.vhdl",
+        "per.pkg.vhdl",
+        "debug_host.ent.vhdl",
+        "debug_per.ent.vhdl",
+    ],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_lib_axi",
+    ],
+)
+
+# gazelle:sorted_srcs false
+vivado_library(
+    name = "axi",
+    standard = "2008",
+    # do not sort
+    srcs = [
+        ":axi_srcs",
+    ],
+    deps = [
+        "//third_party/xilinx:glbl",
+        "//third_party/xilinx:unisims",
+    ],
+)
