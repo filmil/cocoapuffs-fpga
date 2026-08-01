@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "lib",
+    srcs = [":srcs"],
+    hdrs = [":hdrs"],
+    copts = [
+        "-march=rv32i",
+        "-march=rv32i_zicsr",
+        "-Wwrite-strings",
+        "-mcmodel=medany",
+    ],
+    deps = [
+        "//lib/arch:irq",
+        "//lib/uart:lib",
+    ],
+)
+
+filegroup(
+    name = "srcs",
+    # do not sort
+    srcs = [
+        "pic.cc",
+        "reg.cc",
+        "timer.cc",
+        "uart.cc",
+    ],
+)
+
+filegroup(
+    name = "hdrs",
+    # do not sort
+    srcs = [
+        "pic.h",
+        "reg.h",
+        "sdcard.h",
+        "timer.h",
+        "uart.h",
+    ],
+)
+
+cc_test(
+    name = "reg_test",
+    srcs = [
+        "reg_test.cc",
+        "reg.cc",
+        "reg.h",
+    ],
+    deps = [
+        "@googletest//:gtest_main",
+    ],
+)

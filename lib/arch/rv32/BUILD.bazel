@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+# rv32 specific libraries.
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "irq",
+    srcs = [
+        "irq.cc",
+    ],
+    hdrs = [
+        "irq.h",
+    ],
+    copts = [
+        "-march=rv32i",
+        "-mabi=ilp32",
+        "-mcmodel=medany",
+    ],
+    defines = ["PLATFORM_RV32"],
+    linkopts = [
+        "-nostartfiles",
+        "-mabi=ilp32",
+        "-mcmodel=medany",
+    ],
+    target_compatible_with = [
+        "@platforms//os:none",
+        "//third_party/riscv32_toolchain/constraints/march:i",
+    ],
+)

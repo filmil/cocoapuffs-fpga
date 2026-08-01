@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+# x86_64 specific libraries.
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "irq",
+    srcs = [
+        "irq.cc",
+    ],
+    hdrs = [
+        "irq.h",
+    ],
+    defines = ["PLATFORM_X86_64"],
+    target_compatible_with = [
+        "@platforms//cpu:x86_64",
+    ],
+)

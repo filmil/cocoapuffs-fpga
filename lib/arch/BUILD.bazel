@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+# Arch-specific functionality
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "irq",
+    hdrs = [
+        "irq.h",
+    ],
+    deps = select({
+        "@platforms//cpu:x86_64": ["//lib/arch/x86_64:irq"],
+        "@platforms//cpu:riscv32": ["//lib/arch/rv32:irq"],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+)

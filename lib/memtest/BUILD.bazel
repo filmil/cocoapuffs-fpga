@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "memtest",
+    srcs = ["memtest.cc"],
+    hdrs = [":hdrs"],
+    copts = [
+        "-march=rv32i_zicsr",
+        "-Wno-write-strings",
+        "-mcmodel=medany",
+    ],
+    deps = [
+        "//lib",
+        "//lib/arch:irq",
+        "//lib/uart:lib",
+    ],
+)
+
+cc_test(
+    name = "memtest_test",
+    srcs = ["memtest_test.cc"],
+    deps = [
+        ":memtest",
+    ],
+)
+
+filegroup(
+    name = "hdrs",
+    srcs = ["memtest.h"],
+)

@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@bazel_lib//lib:transitions.bzl", "platform_transition_filegroup")
+load("@rules_cc//cc:defs.bzl", "cc_test", rv32_cc_library = "cc_library")
+load("//third_party/riscv32_toolchain:macros.bzl", "bin_file", "disasm_file", "hex_file", "memh_file")
+
+package(default_visibility = ["//visibility:public"])
+
+rv32_cc_library(
+    name = "lib",
+    srcs = ["uart.cc"],
+    hdrs = [":hdrs"],
+    copts = [
+        "-march=rv32i_zicsr",
+        "-mabi=ilp32",
+        "-DUART_ADDRESS=0x40000010",
+        "-Wno-write-strings",
+        "-mcmodel=medany",
+    ],
+    linkopts = [
+        "-march=rv32i_zicsr",
+        "-mabi=ilp32",
+        "-mcmodel=medany",
+    ],
+    deps = [
+        "//third_party/riscv32_toolchain:startup",
+    ],
+)
+
+filegroup(
+    name = "hdrs",
+    srcs = ["uart.h"],
+)
+
+cc_test(
+    name = "uart_test",
+    srcs = [
+        "uart.cc",
+        "uart.h",
+        "uart_test.cc",
+    ],
+    copts = [
+        "-DUART_ADDRESS=0x0",
+        "-Wno-write-strings",
+    ],
+    deps = [
+        "@googletest//:gtest_main",
+    ],
+)

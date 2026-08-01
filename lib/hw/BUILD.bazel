@@ -1,0 +1,17 @@
+
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "hw",
+    srcs = [
+        "memory_map.cc",
+    ],
+    copts = [
+        "-DLIB_HW_MEMORY_BASE=0x00040000",
+    ],
+    hdrs = ["memory_map.h"],
+)
+

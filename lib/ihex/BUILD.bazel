@@ -1,0 +1,26 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility=["//visibility:public"])
+
+
+cc_library(
+    name = "ihex",
+    srcs = ["ihex.cc"],
+    hdrs = ["ihex.h"],
+    copts = [
+        "-march=rv32i_zicsr",
+        "-Wno-write-strings",
+        "-DLIB_HW_MEMORY_BASE=0x00040000",
+        "-mcmodel=medany",
+    ],
+    linkopts = [
+        "-mcmodel=medany",
+    ],
+    deps = [
+        "//lib/uart:lib",
+        "//lib/hw",
+        "//lib/memtest",
+        "//third_party/riscv32_toolchain:startup",
+        "@ihex",
+    ],
+)
