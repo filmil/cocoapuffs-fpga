@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: Apache-2.0
+load("//third_party/riscv32_toolchain:macros.bzl", "bin_file", "disasm_file", "hex_file", "memh_file")
+
+package(default_visibility = ["//visibility:public"])
+
+genrule(
+    name = "bin_raw",
+    srcs = ["muntjac_boot.S"],
+    outs = ["muntjac_boot.elf"],
+    cmd = "$(execpath @riscv_none_elf//:gcc) -march=rv64imac -mabi=lp64 -nostartfiles -nostdlib -Wl,--section-start=.text=0x0 -o $@ $<",
+    tools = ["@riscv_none_elf//:gcc"],
+)
+
+hex_file(
+    name = "hex",
+    srcs = [
+        ":bin_raw",
+    ],
+)
+
+bin_file(
+    name = "bin",
+    srcs = [
+        ":bin_raw",
+    ],
+)
+
+disasm_file(
+    name = "disasm",
+    srcs = [
+        ":bin_raw",
+    ],
+)
+
+memh_file(
+    name = "memh",
+    srcs = [
+        ":bin",
+    ],
+)

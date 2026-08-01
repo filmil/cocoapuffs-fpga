@@ -1,0 +1,181 @@
+load("@rules_nvc//build/nvc:rules.bzl", "wave_view")
+
+# SPDX-License-Identifier: Apache-2.0
+load(
+    "@rules_vivado//build/vivado:rules.bzl",
+    "vivado_library",
+    "vivado_simulation",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "muntjac_core_wrapper.sv",
+])
+
+_MEMH = "//bin/echo:memh"
+_MUNTJAC_MEMH = "//bin/muntjac_boot:memh"
+
+_GENERICS = {
+    "RESET_STRATEGY": "MINI",
+    "MEMFILE": "$(location {})".format(_MEMH),
+    "MEMSIZE": "262144",
+    "MUNTJAC_MEMFILE": "$(location {})".format(_MUNTJAC_MEMH),
+    "MUNTJAC_MEMSIZE": "16384",
+}
+
+filegroup(
+    name = "srcs",
+    # do not sort
+    srcs = [
+        "//ip/a200t:entity_vhdl",
+        "board.arch_rtl.vhdl",
+    ],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_lib_muntjac",
+    ],
+)
+
+filegroup(
+    name = "tb_srcs",
+    # do not sort
+    srcs = [
+        "tb.vhdl",
+        "tb.arch_sim.vhdl",
+    ],
+)
+
+vivado_library(
+    name = "tb",
+    # do not sort
+    srcs = [
+        ":tb_srcs",
+    ],
+    data = [
+        _MEMH,
+        _MUNTJAC_MEMH,
+    ],
+    deps = [
+        "//boards/muntjac/tool.vivado:muntjac_board",
+        "//ip/a200t",
+        "//ip/a200t:constants",
+        "//ip/axi",
+        "//ip/ddr3",
+        "//ip/general/tool.vivado:general",
+        "//ip/tl/tool.vivado:tl",
+        "//ip/wb/tool.vivado:wb",
+        "//ip/wb_uart/vivado:wb_uart",
+        "//testing/a200t:a200t_clk",
+        "//testing/a200t:a200t_ddr3",
+        "//testing/adt/tool.vivado:adt",
+        "//testing/tool.vivado:testing",
+        "//third_party/muntjac/tool.vivado:muntjac",
+        "//third_party/serv:serv_vivado",
+        "//third_party/serv:servile_vivado",
+        "//third_party/serv:serving_vivado",
+        "//third_party/uart:third_party_uart",
+        "//third_party/uart16550/tool.vivado:uart16550",
+        "//third_party/uberddr3",
+        "//third_party/vunit/tool.vivado:vunit_lib",
+        "//third_party/xilinx:unisim",
+    ],
+)
+
+vivado_simulation(
+    name = "sim",
+    args = [
+        "--maxdeltaid",
+        "2",
+    ],
+    config = "cfg_tb",
+    custom_tcl_script = "sim.tcl",
+    data = [
+        _MEMH,
+        _MUNTJAC_MEMH,
+    ],
+    extra_modules = ["glbl.glbl"],
+    generic_tops = _GENERICS | {
+        "sim_duration_ns": "100",
+    },
+    library = ":tb",
+    tags = [
+        "manual",
+    ],
+    top = "tb",
+    xelab_args = [
+        "--debug",
+        "all",
+        "--verbose",
+        "2",
+        "-O0",
+    ],
+    xelab_relaxed = True,
+)
+
+vivado_library(
+    name = "tb_minimal_lib",
+    srcs = ["tb_minimal.sv"],
+    deps = [
+        "//boards/muntjac/tool.vivado:muntjac_board",
+        "//third_party/muntjac/tool.vivado:muntjac",
+    ],
+)
+
+vivado_simulation(
+    name = "sim_minimal",
+    args = [
+        "--maxdeltaid",
+        "10",
+    ],
+    custom_tcl_script = "sim_diag.tcl",
+    library = ":tb_minimal_lib",
+    tags = [
+        "manual",
+    ],
+    top = "tb_minimal",
+    xelab_args = [
+        "--debug",
+        "all",
+        "--verbose",
+        "2",
+        "-O0",
+        "-timescale",
+        "1ns/1ps",
+    ],
+    xelab_relaxed = True,
+)
+
+filegroup(
+    name = "vcd",
+    srcs = [":sim"],
+    output_group = "vcd",
+)
+
+wave_view(
+    name = "view",
+    args = [
+        "--save=$(location full_wave.gtkw)",
+    ],
+    vhdl_run = ":vcd",
+    deps = [
+        "full_wave.gtkw",
+    ],
+)
+
+filegroup(
+    name = "vcd_minimal",
+    srcs = [":sim_minimal"],
+    output_group = "vcd",
+)
+
+wave_view(
+    name = "view_minimal",
+    args = [
+        "--save=$(location full_wave.gtkw)",
+    ],
+    vhdl_run = ":vcd_minimal",
+    deps = [
+        "full_wave.gtkw",
+    ],
+)

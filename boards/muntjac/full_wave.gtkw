@@ -1,0 +1,70 @@
+[*]
+[*] GTKWave Analyzer v3.3.119 (w)1999-2024 BSI
+[*] Wed Dec 17 08:30:15 2025
+[*]
+[dumpfile] "/home/filmil/.cache/bazel/_bazel_filmil/044c017957cb4bfe82e0fc27b83f1ca9/execroot/_main/bazel-out/k8-fastbuild/bin/boards/rv32_ddr3/sim.vcd"
+[dumpfile_mtime] "Wed Dec 17 07:59:15 2025"
+[dumpfile_size] 2901589769
+[savefile] "/home/filmil/code/hw/a200t_examples/boards/rv32_ddr3/full_wave.gtkw"
+[timestart] 21806242200
+[size] 2560 1353
+[pos] 0 0
+*-16.536707 21806701000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] tb.
+[treeopen] tb.uut0.
+[treeopen] tb.uut0.cpu0.servile.
+[treeopen] tb.uut0.cpu0.servile.cpu.
+[treeopen] tb.uut0.cpu0.servile.cpu.gen_csr.
+[treeopen] tb.uut0.is_simulation_gen.
+[treeopen] tb.uut0.is_simulation_gen.ram0.
+[treeopen] tb.uut0.pic0.
+[treeopen] tb.uut0.uart1.
+[sst_width] 267
+[signals_width] 339
+[sst_expanded] 1
+[sst_vpaned_height] 645
+@200
+--DEBUG
+@22
+tb.uut0.cpu0.o_wb_adr[31:0]
+tb.uut0.cpu0.o_wb_dat[31:0]
+tb.uut0.cpu0.o_wb_sel[3:0]
+@28
+tb.uut0.cpu0.o_wb_stb
+tb.uut0.cpu0.o_wb_we
+tb.uut0.wb_mux0.debug_ack
+@22
+tb.uut0.wb_mux0.debug_rdt[31:0]
+@200
+-== UART
+@28
+tb.tb_rx
+tb.tb_tx
+@200
+-
+@28
+tb.uut0.pic0.irqo
+@22
+tb.uut0.pic0.regi[31:0]
+tb.uut0.pic0.rego[31:0]
+tb.uut0.pic0.decoder0.debug_index[31:0]
+tb.uut0.pic0.decoder0.debug_data[31:0]
+@200
+-tb/uut0/ram0/debug_host0
+@22
+tb.uut0.is_simulation_gen.ram0.debug_host0.adr[31:0]
+@28
+tb.uut0.is_simulation_gen.ram0.debug_host0.cyc
+@22
+tb.uut0.is_simulation_gen.ram0.debug_host0.dat[31:0]
+tb.uut0.is_simulation_gen.ram0.debug_host0.sel[3:0]
+@28
+tb.uut0.is_simulation_gen.ram0.debug_host0.we
+@200
+-tb/uut0/ram0/debug_per0
+@28
+tb.uut0.is_simulation_gen.ram0.debug_per0.ack
+@22
+tb.uut0.is_simulation_gen.ram0.debug_per0.rdt[31:0]
+[pattern_trace] 1
+[pattern_trace] 0

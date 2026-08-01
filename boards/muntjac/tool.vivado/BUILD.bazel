@@ -1,0 +1,142 @@
+# SPDX-License-Identifier: Apache-2.0
+load(
+    "@rules_vivado//build/vivado:rules.bzl",
+    "vivado_library",
+    "vivado_place_and_route2",
+    "vivado_program_device",
+    "vivado_synthesis2",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+_MEMH = "//bin/echo:memh"
+_MUNTJAC_MEMH = "//bin/muntjac_boot:memh"
+
+_GENERICS = {
+    "RESET_STRATEGY": "MINI",
+    "MEMFILE": "$(location {})".format(_MEMH),
+    "MEMSIZE": "262144",
+    "MUNTJAC_MEMFILE": "$(location {})".format(_MUNTJAC_MEMH),
+    "MUNTJAC_MEMSIZE": "16384",
+}
+
+vivado_library(
+    name = "muntjac_board_sv",
+    srcs = [
+        "//boards/muntjac:muntjac_core_wrapper.sv",
+    ],
+    deps = [
+        "//third_party/muntjac/tool.vivado:muntjac",
+    ],
+)
+
+vivado_library(
+    name = "muntjac_board",
+    # do not sort
+    srcs = [
+        "//boards/muntjac:srcs",
+    ],
+    deps = [
+        ":muntjac_board_sv",
+        "//ip/a200t",
+        "//ip/a200t:constants",
+        "//ip/axi",
+        "//ip/ddr3",
+        "//ip/general/tool.vivado:general",
+        "//ip/tl/tool.vivado:tl",
+        "//ip/wb/tool.vivado:wb",
+        "//ip/wb_uart/vivado:wb_uart",
+        "//third_party/muntjac/tool.vivado:muntjac",
+        "//third_party/serv:serv_vivado",
+        "//third_party/serv:servile_vivado",
+        "//third_party/serv:serving_vivado",
+        "//third_party/uart:third_party_uart",
+        "//third_party/uart16550/tool.vivado:uart16550",
+        "//third_party/uberddr3",
+        "//third_party/xilinx:unisim",
+    ],
+)
+
+vivado_synthesis2(
+    name = "synth",
+    # do not sort
+    srcs = [
+        "//boards/muntjac:srcs",
+        "//ip/a200t:entity_vhdl",
+        "//third_party/muntjac:hdrs",
+        "//boards/muntjac:muntjac_core_wrapper.sv",
+        _MEMH,
+        _MUNTJAC_MEMH,
+    ],
+    data = [
+        _MEMH,
+        _MUNTJAC_MEMH,
+    ],
+    generics = _GENERICS | {
+        "BAUD_RATE": "115200",
+    },
+    include_dirs = [
+        "external/rules_fusesoc++fusesoc_cores+fusesoc_cores/build/lowrisc_muntjac_core_0.1/src/lowrisc_prim_assert_0.1/rtl",
+        "external/rules_fusesoc++fusesoc_cores+fusesoc_cores/build/lowrisc_muntjac_core_0.1/src/lowrisc_prim_util_memload_0/rtl",
+        "external/rules_fusesoc++fusesoc_cores+fusesoc_cores/build/lowrisc_muntjac_core_0.1/src/lowrisc_tl_common_0.1/rtl",
+    ],
+    part = "xc7a200tfbg484-2",
+    top = "board",
+    xdcs = [
+        "//ip/a200t:xdcs",
+    ],
+    deps = [
+        "//ip/a200t",
+        "//ip/a200t:constants",
+        "//ip/axi",
+        "//ip/ddr3",
+        "//ip/general/tool.vivado:general",
+        "//ip/tl/tool.vivado:tl",
+        "//ip/wb/tool.vivado:wb",
+        "//ip/wb_uart/vivado:wb_uart",
+        "//third_party/muntjac/tool.vivado:muntjac",
+        "//third_party/serv:serv_vivado",
+        "//third_party/serv:servile_vivado",
+        "//third_party/serv:serving_vivado",
+        "//third_party/uart:third_party_uart",
+        "//third_party/uart16550/tool.vivado:uart16550",
+        "//third_party/uberddr3",
+        "//third_party/xilinx:unisim",
+    ],
+)
+
+vivado_place_and_route2(
+    name = "pnr",
+    synthesis = ":synth",
+    xdcs = [
+        "//ip/a200t:xdcs",
+    ],
+    place_design_options = "-directive Explore",
+    post_place_design = [
+        "phys_opt_design -directive Explore",
+    ],
+    route_design_options = "-directive AggressiveExplore",
+    post_route_design = [
+        "phys_opt_design -directive Explore",
+    ],
+)
+
+vivado_program_device(
+    name = "prog",
+    data = [
+        "//third_party/xilinx/prog_daemon",
+        "//third_party/xilinx/prog_daemon:run",
+    ],
+    prog_daemon = "//third_party/xilinx/prog_daemon:run",
+    prog_daemon_args = [
+        "--daemon-binary=./third_party/xilinx/prog_daemon/prog_daemon_/prog_daemon",
+        "--",  # Following args are args for the prog_daemon.
+        "--daemon-binary=./third_party/xilinx/hw_server/upload.bash",
+        "--",  # Following args are for the upload.bash script.
+        "--upload-shar=./third_party/xilinx/hw_server/hw_server.shar",
+        "--prog-server=your-prog-server.example",
+    ],
+    deps = [
+        ":pnr",
+    ],
+)
