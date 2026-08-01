@@ -1,0 +1,45 @@
+load(
+    "@rules_nvc//build/nvc:rules.bzl",
+    #"vhdl_elaborate",
+    "vhdl_library",
+    #"vhdl_run",
+    "vhdl_test",
+    #"wave_view",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+vhdl_library(
+    name = "general",
+    standard = "2008",
+    srcs = ["//ip/general:srcs"],
+    deps = [
+        "//ip/wb/tool.nvc:wb",
+    ],
+)
+
+vhdl_test(
+    name = "uartmux_test",
+    standard = "2008",
+    srcs = [
+        "//ip/general:uartmux.test.vhdl",
+    ],
+    entity = "uartmux_tb",
+    deps = [
+        ":general",
+        "@rules_vunit//tool.nvc:vunit_lib",
+    ],
+)
+
+vhdl_test(
+    name = "serv_rf_bram_test",
+    standard = "2008",
+    srcs = [
+        "//ip/general:serv_rf_bram.test.vhdl",
+    ],
+    entity = "serv_rf_bram_tb",
+    deps = [
+        ":general",
+        "@rules_vunit//tool.nvc:vunit_lib",
+    ],
+)

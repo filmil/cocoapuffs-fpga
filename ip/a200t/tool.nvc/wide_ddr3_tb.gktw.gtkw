@@ -1,0 +1,68 @@
+[*]
+[*] GTKWave Analyzer v3.3.119 (w)1999-2024 BSI
+[*] Fri Jul 11 12:11:24 2025
+[*]
+[dumpfile] "/home/filmil/.cache/bazel/_bazel_filmil/fba57cb1498e5edac648620d88e186c0/execroot/_main/bazel-out/k8-fastbuild/bin/ip/a200t/tool.nvc/tb_run.vcd"
+[dumpfile_mtime] "Fri Jul 11 12:10:51 2025"
+[dumpfile_size] 17938
+[savefile] "/home/filmil/code/a200t_examples/ip/a200t/tool.nvc/wide_ddr3_tb.gktw.gtkw"
+[timestart] 0
+[size] 1706 979
+[pos] -1 -1
+*-25.279701 76000000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] tb.
+[treeopen] tb.uut0.
+[sst_width] 405
+[signals_width] 291
+[sst_expanded] 1
+[sst_vpaned_height] 323
+@420
+tb.test_count
+@200
+---- Time Sync
+@28
+tb.clkgen0.clk
+tb.clkgen0.reset
+@200
+---- hs_wb_host
+@22
+tb.hs_wb_host.adr[31:0]
+@28
+tb.hs_wb_host.cyc
+@22
+tb.hs_wb_host.dat[31:0]
+tb.hs_wb_host.sel[3:0]
+@28
+tb.hs_wb_host.we
+@200
+--- hs_wb_per
+@28
+tb.hs_wb_per.ack
+@22
+tb.hs_wb_per.rdt[31:0]
+@200
+--- ps_wb_host
+@22
+tb.ps_wb_host.adr[24:0]
+tb.ps_wb_host.aux[3:0]
+@28
+tb.ps_wb_host.cyc
+@22
+tb.ps_wb_host.data[255:0]
+tb.ps_wb_host.sel[31:0]
+@28
+tb.ps_wb_host.stb
+tb.ps_wb_host.we
+@200
+--- ps_wb_per
+@28
+tb.ps_wb_per.ack
+@22
+tb.ps_wb_per.aux[3:0]
+tb.ps_wb_per.data[255:0]
+@28
+tb.ps_wb_per.err
+tb.ps_wb_per.stall
+tb.uut0.r.state
+[pattern_trace] 1
+[pattern_trace] 0

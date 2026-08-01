@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVC simulation library for the //ip/debug peripherals.
+load("@rules_nvc//build/nvc:rules.bzl", "vhdl_library")
+
+package(default_visibility = ["//visibility:public"])
+
+vhdl_library(
+    name = "debug",
+    standard = "2019",
+    # do not sort
+    srcs = [
+        "//ip/debug:srcs",
+    ],
+)

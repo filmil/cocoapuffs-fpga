@@ -1,0 +1,75 @@
+# SPDX-License-Identifier: Apache-2.0
+load(
+    "@rules_nvc//build/nvc:rules.bzl",
+    "vhdl_elaborate",
+    "vhdl_library",
+    "vhdl_run",
+    "wave_view",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+vhdl_library(
+    name = "a200t",
+    standard = "2008",
+    srcs = [
+        "//ip/a200t:srcs1",
+        "//ip/a200t:srcs2",
+    ],
+    entities = [
+        "wide_wb_ddr3",
+    ],
+    deps = [
+        "//ip/axi/tool.nvc:axi",
+        "//ip/wb/tool.nvc:wb",
+    ],
+)
+
+vhdl_elaborate(
+    name = "wide_wb_ddr3",
+    library = ":a200t",
+    standard = "2008",
+)
+
+vhdl_library(
+    name = "wide_wb_ddr3_tb",
+    standard = "2008",
+    srcs = [
+        "//ip/a200t:wide_wb_ddr3_tb",
+    ],
+    entities = [
+        "tb",
+    ],
+    deps = [
+        ":a200t",
+        "//ip/axi/tool.nvc:axi",
+        "//ip/wb/tool.nvc:wb",
+        # NOTE: no //testing/tool.nvc:testing -- that library does not compile
+        # under NVC right now (vunit vc_context bit-rot); the tb only needed
+        # its clkgen, which is now inlined.
+    ],
+)
+
+vhdl_elaborate(
+    name = "tb",
+    library = ":wide_wb_ddr3_tb",
+    standard = "2008",
+)
+
+vhdl_run(
+    name = "tb_run",
+    entity = ":tb",
+    standard = "2008",  # match the library (rule defaults to 2019)
+    deps = [":wide_wb_ddr3_tb"],
+)
+
+wave_view(
+    name = "tb_view",
+    args = [
+        "--save=$(location wide_ddr3_tb.gtkw)",
+    ],
+    vhdl_run = ":tb_run",
+    deps = [
+        "wide_ddr3_tb.gtkw",
+    ],
+)

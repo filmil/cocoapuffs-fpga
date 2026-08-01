@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+load(
+    "@rules_nvc//build/nvc:rules.bzl",
+    "vhdl_test",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+# Focused simulation of the GRLIB grplic_ahb (RISC-V PLIC): configure it over
+# AHB the way the Zircon kernel does, assert the APBUART interrupt line, and
+# observe the S-context eip output (irqo(1) -> seip) directly -- the signal that
+# is not JTAG-visible on the FPGA.
+vhdl_test(
+    name = "grplic_test",
+    srcs = ["//ip/plic:grplic_test"],
+    entity = "grplic_tb",
+    deps = [
+        "//:gaisler",
+        "//:grlib",
+    ],
+    standard = "2008",
+)

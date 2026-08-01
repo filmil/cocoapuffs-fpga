@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: Apache-2.0
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "uartmux.test.vhdl",
+    "serv_rf_bram.test.vhdl",
+])
+
+# gazelle:sorted_srcs false
+filegroup(
+    name = "srcs",
+    # do not sort
+    srcs = [
+        "types.pkg.vhdl",
+        "serv_rf_bram.vhdl",
+        "uartmux.vhdl",
+        "wb_cdc.vhdl",
+    ],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_lib_general",
+    ],
+)

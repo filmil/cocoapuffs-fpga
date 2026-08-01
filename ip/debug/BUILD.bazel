@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_nvc//:macros.bzl", "vhdl_testbench")
+
+package(default_visibility = ["//ip/debug:__subpackages__"])
+
+filegroup(
+    name = "srcs",
+    # do not sort
+    srcs = [
+        "types.pkg.vhdl",
+        "debouncer.vhdl",
+        "uart_tx.vhdl",
+        "ahb_recorder.vhdl",
+    ],
+)
+
+vhdl_testbench(
+    name = "debouncer_test",
+    # do not sort
+    srcs = [
+        "debouncer.test.vhdl",
+    ],
+    entity = "debouncer_test_tb",
+    deps = [
+        "//ip/debug/tool.nvc:debug",
+    ],
+)
+
+vhdl_testbench(
+    name = "ahb_recorder_test",
+    # do not sort
+    srcs = [
+        "ahb_recorder.test.vhdl",
+    ],
+    entity = "ahb_recorder_test_tb",
+    deps = [
+        "//ip/debug/tool.nvc:debug",
+    ],
+)
+
+vhdl_testbench(
+    name = "uart_tx_test",
+    # do not sort
+    srcs = [
+        "uart_tx.test.vhdl",
+    ],
+    entity = "uart_tx_test_tb",
+    deps = [
+        "//ip/debug/tool.nvc:debug",
+    ],
+)

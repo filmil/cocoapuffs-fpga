@@ -1,0 +1,212 @@
+# SPDX-License-Identifier: Apache-2.0
+load("@rules_nvc//build/nvc:rules.bzl", "wave_view")
+load("@com_github_filmil_go_vcd_parser//:macros.bzl", "vcd_go_test", "vcd_index")
+load("@rules_go//go:def.bzl", "go_test")
+load(
+    "@rules_vivado//build/vivado:rules.bzl",
+    "vivado_generics",
+    "vivado_library",
+    "vivado_place_and_route",
+    "vivado_program_device",
+    "vivado_project",
+    "vivado_simulation",
+    "vivado_synthesis",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "entity_vhdl",
+    # do not sort
+    srcs = [
+        "board.ent.vhdl",
+        "board.arch.vhdl",
+    ],
+    visibility = [
+        "//visibility:public",
+    ],
+)
+
+filegroup(
+    name = "srcs1",
+    srcs = [
+        "ddr3.pkg.vhdl",
+    ],
+)
+
+filegroup(
+    name = "srcs11",
+    # do not sort
+    srcs = [
+        "clk.vhdl",
+        "clkgen.ent.vhdl",
+        "clkgen.arch.vhdl",
+        "clkgen_complex.vhdl",
+        "leds.vhdl",
+    ],
+)
+
+filegroup(
+    name = "srcs2",
+    # do not sort
+    srcs = [
+        "wide_wb_ddr3.vhdl",
+    ],
+)
+
+filegroup(
+    name = "srcs3",
+    # do not sort
+    srcs = [
+        "ram.vhdl",
+        "uart.vhdl",
+    ],
+)
+
+filegroup(
+    name = "srcs",
+    # do not sort
+    srcs = [
+        ":srcs1",
+        ":srcs11",
+        ":srcs2",
+        ":srcs3",
+    ],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_lib_a200t",
+    ],
+)
+
+vivado_library(
+    name = "a200t",
+    standard = "2008",
+    srcs = [
+        ":srcs",
+    ],
+    deps = [
+        "//ip/axi",
+        "//ip/ddr3",
+        "//ip/wb/tool.vivado:wb",
+        "//ip/wb_uart/vivado:wb_uart",
+        "//third_party/uberddr3",
+        "//third_party/uart:third_party_uart",
+
+        # VHDL components, example:
+        # library unisim;
+        # use unisim.vcomponents.all;
+        "//third_party/xilinx:unisim",
+        ":constants",
+    ],
+)
+
+filegroup(
+    name = "constants_srcs",
+    srcs = [
+        "constants.pkg.vhdl",
+    ],
+    tags = [
+        "vhdl_ls",
+        "vhdl_ls_lib_a200t_constants",
+    ],
+)
+
+vivado_library(
+    name = "constants",
+    standard = "2008",
+    srcs = [
+        ":constants_srcs",
+    ],
+    library_name = "a200t_constants",
+    deps = [
+        "//third_party/xilinx:unisim",
+    ],
+)
+
+filegroup(
+    name = "clkgen_complex_test_srcs",
+    srcs = [
+        "clkgen_complex.test.vhdl",
+    ],
+)
+
+vivado_library(
+    name = "clkgen_complex_test",
+    standard = "2008",
+    srcs = [
+        ":clkgen_complex_test_srcs",
+    ],
+    deps = [
+        ":a200t",
+        ":constants",
+        "//testing/tool.vivado:testing",
+        "//third_party/xilinx:unisim",
+    ],
+)
+
+vivado_simulation(
+    name = "clkgen_complex_test_sim",
+    library = ":clkgen_complex_test",
+    top = "clkgen_complex_test",
+)
+
+filegroup(
+    name = "clkgen_complex_test_vcd",
+    srcs = [":clkgen_complex_test_sim"],
+    output_group = "vcd",
+)
+
+wave_view(
+    name = "clkgen_complex_test_view",
+    vhdl_run = ":clkgen_complex_test_vcd",
+)
+
+vcd_index(
+    name = "clkgen_complex_test_db",
+    vcd_target = ":clkgen_complex_test_vcd",
+)
+
+vcd_go_test(
+    name = "clkgen_complex_test_vcd_test",
+    size = "small",
+    srcs = ["clkgen_complex_test_vcd_test.go"],
+    embed = [],
+    importpath = "github.com/filmil/a200t_examples/io/a200t",
+    vcd_file = ":clkgen_complex_test_db",
+    deps = [
+        "@com_github_davecgh_go_spew//spew",
+        "@com_github_filmil_go_vcd_parser//db",
+        "@com_github_filmil_go_vcd_parser//dbq",
+        "@com_github_filmil_go_vcd_parser//dbt",
+        "@com_github_filmil_go_vcd_parser//vcd",
+    ],
+)
+
+go_test(
+    name = "a200t_test",
+    srcs = ["clkgen_complex_test_vcd_test.go"],
+    tags = ["manual"],
+    deps = ["@com_github_filmil_go_vcd_parser//dbq"],
+)
+
+filegroup(
+    name = "wide_wb_ddr3_tb",
+    srcs = [
+        ":wide_wb_ddr3.tb.vhdl",
+    ],
+)
+
+filegroup(
+    name = "xdcs",
+    srcs = [
+        "a200t.xdc",
+        "a200t_clocks.xdc",
+        "a200t_con1.xdc",
+        "a200t_con2.xdc",
+        "a200t_con3.xdc",
+        "a200t_ddr3.xdc",
+        #"a200t_pcie.xdc",
+        "a200t_qspi.xdc",
+        "a200t_xadc.xdc",
+    ],
+)
