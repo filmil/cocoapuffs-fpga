@@ -4,8 +4,9 @@
 [![Build](https://github.com/filmil/cocoapuffs-fpga/actions/workflows/build.yml/badge.svg)](https://github.com/filmil/cocoapuffs-fpga/actions/workflows/build.yml)
 
 **Cocoapuffs** is a homebrew RISC-V system-on-chip for the Alinx AX7A200B board
-(AMD Artix-7 `xc7a200t`), built entirely with [Bazel][bazel] and open tooling.
-Its main core is the 64-bit [NOEL-V][noelv] (from the [GRLIB][grlib] IP library);
+(AMD Artix-7 `xc7a200t`), built entirely with [Bazel][bazel] and open 
+(or freely available in the case of Vivado) tooling. Its main core is the
+64-bit [NOEL-V][noelv] (from the [GRLIB][grlib] IP library);
 a small bit-serial [SERV][serv] RV32 core acts as the serial boot loader, backed
 by DDR3, a Gaisler APBUART, and the usual GRLIB plumbing.
 
