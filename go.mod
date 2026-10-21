@@ -1,6 +1,6 @@
 module github.com/filmil/a200t_examples
 
-go 1.26.2
+go 1.26.10
 
 require (
 	github.com/bitfield/script v0.24.1
