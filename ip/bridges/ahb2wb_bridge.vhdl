@@ -96,8 +96,15 @@ begin
 
                 case ahb_state is
                     when AHB_IDLE =>
-                        -- Check for valid AHB transaction start.
-                        if (ahb_ahbsi.hsel(HSEL_INDEX) = '1' and
+                        -- Check for valid AHB transaction start.  An address
+                        -- phase ends only in a cycle where the bus hready is
+                        -- high.  While another slave stretches its data phase,
+                        -- hsel and htrans already show the next transfer, but
+                        -- hwdata still holds that slave's write data.  Starting
+                        -- then made a RAM write that followed an APB (UART)
+                        -- write back to back store the UART write's data.
+                        if (ahb_ahbsi.hready = '1' and
+                            ahb_ahbsi.hsel(HSEL_INDEX) = '1' and
                            (ahb_ahbsi.htrans = HTRANS_NONSEQ or ahb_ahbsi.htrans = HTRANS_SEQ)) then
                             ahb_haddr <= ahb_ahbsi.haddr;
                             ahb_hwrite <= ahb_ahbsi.hwrite;
