@@ -45,7 +45,19 @@ architecture sim of ahb2wb_bridge_tb is
     signal mem : mem_t := (others => (others => '0'));
 
     signal fail_count : natural := 0;
+
+    -- The test also plays a second slave (an APB bridge, for one), whose
+    -- data phase can come right before the bridge's.
+    signal other_dphase : boolean := false;     -- its data phase is in progress
+    signal other_ready  : std_ulogic := '1';    -- its hready
+
+    -- Wishbone transfers the mock slave has acknowledged.
+    signal wb_xfers : natural := 0;
 begin
+    -- The bus hready, as the AHB controller drives it: the hready of the slave
+    -- whose data phase is in progress, the bridge's or the other slave's.
+    ahb_ahbsi.hready <= other_ready when other_dphase else ahb_ahbso.hready;
+
     -- 50MHz Clock (20ns period)
     clk_ahb <= not clk_ahb after 10 ns when not stop_sim else '0';
     -- 100MHz Clock (10ns period)
@@ -89,6 +101,7 @@ begin
                         wb_wbi.rdt <= mem(idx);
                     end if;
                     wb_wbi.ack <= '1';
+                    wb_xfers <= wb_xfers + 1;
                 end if;
             end if;
         end if;
@@ -210,6 +223,97 @@ begin
             ahb_ahbsi.hburst  <= (others => '0');
         end procedure;
 
+        -- Word transfer to the bridge, back to back after a write to ANOTHER
+        -- slave that inserts `waits` wait states (an APB register behind the
+        -- APB bridge, for one).  The address phase of the bridge's transfer
+        -- overlaps the other slave's data phase: hsel and htrans are already
+        -- valid for the bridge, but the bus hready is low and hwdata still
+        -- holds the other transfer's data (`stale`).  The bridge must not
+        -- start before the bus hready is high, must store `data` on a write,
+        -- and must make exactly one Wishbone transfer.
+        procedure ahb_xfer_after_other(addr   : std_logic_vector(31 downto 0);
+                                       stale  : std_logic_vector(31 downto 0);
+                                       data   : std_logic_vector(31 downto 0);
+                                       wr     : std_ulogic;
+                                       waits  : natural;
+                                       rd_val : out std_logic_vector(31 downto 0)) is
+            variable xfers_before : natural;
+            variable cycles : natural := 0;
+
+            -- The bridge's own hready low here means it has started a
+            -- transfer whose address phase has not ended yet.
+            procedure check_bridge_idle is
+            begin
+                if ahb_ahbso.hready /= '1' then
+                    report "transfer after other slave, " & integer'image(waits) &
+                           " wait(s): FAIL the bridge started while the bus hready was low"
+                           severity error;
+                    fail_count <= fail_count + 1;
+                end if;
+            end procedure;
+        begin
+            wait until rising_edge(clk_ahb) and ahb_ahbsi.hready = '1';
+            xfers_before := wb_xfers;
+            -- Address phase of the other slave's write: the bridge is not
+            -- selected.
+            ahb_ahbsi.hsel(0) <= '0';
+            ahb_ahbsi.hburst  <= (others => '0');
+            ahb_ahbsi.haddr   <= x"FF900000";
+            ahb_ahbsi.hsize   <= "010";
+            ahb_ahbsi.hwrite  <= '1';
+            ahb_ahbsi.htrans  <= HTRANS_NONSEQ;
+
+            wait until rising_edge(clk_ahb);
+            -- Its data phase, with the bridge's address phase pending.
+            other_dphase <= true;
+            ahb_ahbsi.hwdata(31 downto 0) <= stale;
+            ahb_ahbsi.hsel(0) <= '1';
+            ahb_ahbsi.haddr   <= addr;
+            ahb_ahbsi.hwrite  <= wr;
+            ahb_ahbsi.htrans  <= HTRANS_NONSEQ;
+            if waits > 0 then
+                other_ready <= '0';
+                for i in 1 to waits loop
+                    wait until rising_edge(clk_ahb);
+                    check_bridge_idle;
+                end loop;
+                other_ready <= '1';
+            end if;
+
+            -- The other slave's last data-phase cycle: it drives hready high.
+            -- The edge that ends it also ends the bridge's address phase.
+            wait until rising_edge(clk_ahb);
+            check_bridge_idle;
+            other_dphase <= false;
+            ahb_ahbsi.hwdata(31 downto 0) <= data;
+            ahb_ahbsi.htrans  <= HTRANS_IDLE;
+            loop
+                wait until rising_edge(clk_ahb);
+                if ahb_ahbsi.hready = '1' then
+                    rd_val := ahb_ahbso.hrdata(31 downto 0);
+                    exit;
+                end if;
+                cycles := cycles + 1;
+                assert cycles < 200
+                    report "transfer after other slave: the bridge never finished"
+                    severity failure;
+            end loop;
+            ahb_ahbsi.hsel(0) <= '0';
+            if wb_xfers /= xfers_before + 1 then
+                report "transfer after other slave, " & integer'image(waits) &
+                       " wait(s): FAIL " & integer'image(wb_xfers - xfers_before) &
+                       " Wishbone transfers, expected 1" severity error;
+                fail_count <= fail_count + 1;
+            end if;
+            -- fail_count is a signal: let an increment take effect.
+            wait for 0 ns;
+        end procedure;
+
+        type natural_array is array(natural range <>) of natural;
+        constant wait_cases : natural_array := (0, 1, 2, 3, 4, 16);
+        variable t7_addr : std_logic_vector(31 downto 0);
+        variable t7_data : std_logic_vector(31 downto 0);
+
     begin
         -- Initialize AHB signals
         ahb_ahbsi.hsel <= (others => '0');
@@ -220,7 +324,6 @@ begin
         ahb_ahbsi.hburst <= (others => '0');
         ahb_ahbsi.hwdata <= (others => '0');
         ahb_ahbsi.hprot <= (others => '0');
-        ahb_ahbsi.hready <= '1';
         ahb_ahbsi.hmaster <= (others => '0');
         ahb_ahbsi.hmastlock <= '0';
         ahb_ahbsi.hmbsel <= (others => '0');
@@ -300,6 +403,52 @@ begin
             end if;
         end loop;
 
+        -- 7) Transfer that follows another slave's wait-stated write back to
+        --    back.  Regression for the stale-hwdata bug: on the board, a DDR3
+        --    store right after a UART store got the UART store's data, because
+        --    the bridge started on hsel and htrans alone, while hready was low.
+        --    16 wait states is longer than a whole bridge transfer: a bridge
+        --    that starts early then finishes, and starts a second time.
+        for k in wait_cases'range loop
+            -- Write: the bridge must store `data`, not the other slave's.
+            t7_addr := std_logic_vector(to_unsigned(k * 4, 32));
+            t7_data := std_logic_vector(unsigned'(x"80000005") + to_unsigned(k * 16, 32));
+            ahb_xfer_after_other(t7_addr, x"0000006B", t7_data, '1',
+                                 wait_cases(k), dummy);
+            ahb_xfer(t7_addr, x"00000000", "010", '0', dummy);
+            if dummy = t7_data then
+                report "write after other slave, " & integer'image(wait_cases(k)) &
+                       " wait(s): OK (0x" & to_hstring(dummy) & ")";
+            else
+                report "write after other slave, " & integer'image(wait_cases(k)) &
+                       " wait(s): FAIL got 0x" & to_hstring(dummy) & " expected 0x" &
+                       to_hstring(t7_data) severity error;
+                fail_count <= fail_count + 1;
+                wait for 0 ns;
+            end if;
+
+            -- Read: the bridge must return the stored word.  Store a new
+            -- word with a plain write first: the read data lines still hold
+            -- the old word from the check above, and a read that returned
+            -- stale lines must not pass.
+            t7_data := not t7_data;
+            ahb_xfer(t7_addr, t7_data, "010", '1', dummy);
+            ahb_xfer_after_other(t7_addr, x"0000006B", x"00000000", '0',
+                                 wait_cases(k), dummy);
+            if dummy = t7_data then
+                report "read after other slave, " & integer'image(wait_cases(k)) &
+                       " wait(s): OK (0x" & to_hstring(dummy) & ")";
+            else
+                report "read after other slave, " & integer'image(wait_cases(k)) &
+                       " wait(s): FAIL got 0x" & to_hstring(dummy) & " expected 0x" &
+                       to_hstring(t7_data) severity error;
+                fail_count <= fail_count + 1;
+                wait for 0 ns;
+            end if;
+        end loop;
+
+        -- fail_count is a signal: let the last increment take effect.
+        wait for 0 ns;
         if fail_count = 0 then
             report "ALL BYTE-STROBE TESTS PASSED";
         else
