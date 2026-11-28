@@ -79,7 +79,10 @@ live system. That same openness means a single observable symptom---a core that
 fetches garbage, a store that ``never reaches the bus,'' a console that goes
 quiet---can originate in any layer, and the layers interact in ways that defeat
 single-layer reasoning. This paper is a development history of exactly that
-situation, assembled from the working notes of the bring-up.
+situation, assembled from the working notes of the bring-up. The complete
+design---the RTL, the RISC-V firmware and boot chain, and the Bazel build that
+ties them together---is available as open source at
+\url{https://github.com/filmil/cocoapuffs-fpga}.
 
 The target is Zircon, the microkernel under Google's Fuchsia, running on a
 NOEL-V core (from the GRLIB IP library) synthesized to a Xilinx Artix-7

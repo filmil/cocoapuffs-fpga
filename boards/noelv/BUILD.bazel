@@ -173,10 +173,11 @@ genrule(
            "cp $$dtb $@; chmod +w $@; " +
            # /chosen already exists in board.dts (stdout-path); add to it.
            # 64-bit values as two u32 cells (hi, lo) so the shim reads u64 cleanly.
-           "fdtput -t x $@ /chosen linux,initrd-start " +
+           "$(execpath @dtc//:fdtput) -t x $@ /chosen linux,initrd-start " +
            "$$(printf '0x%x 0x%x' $$((start >> 32)) $$((start & 0xffffffff))); " +
-           "fdtput -t x $@ /chosen linux,initrd-end " +
+           "$(execpath @dtc//:fdtput) -t x $@ /chosen linux,initrd-end " +
            "$$(printf '0x%x 0x%x' $$((end >> 32)) $$((end & 0xffffffff)))"),
+    tools = ["@dtc//:fdtput"],
 )
 
 # SIM-ONLY variant of board_zircon_dtb for the FULL-boot xsim run: identical
@@ -205,15 +206,16 @@ genrule(
            "start=$$((" + SIM_ZBI_ADDR + ")); " +
            "end=$$((start + $$(stat -L -c%s $$zbi))); " +
            "cp $$dtb $@; chmod +w $@; " +
-           "fdtput -t x $@ /memory@0 reg 0x0 0x0 0x0 0x4000000; " +
-           "fdtput -c $@ /memory@10000000; " +
-           "fdtput -t s $@ /memory@10000000 device_type memory; " +
-           "fdtput -t x $@ /memory@10000000 reg 0x0 0x10000000 0x0 0x400000; " +
+           "$(execpath @dtc//:fdtput) -t x $@ /memory@0 reg 0x0 0x0 0x0 0x4000000; " +
+           "$(execpath @dtc//:fdtput) -c $@ /memory@10000000; " +
+           "$(execpath @dtc//:fdtput) -t s $@ /memory@10000000 device_type memory; " +
+           "$(execpath @dtc//:fdtput) -t x $@ /memory@10000000 reg 0x0 0x10000000 0x0 0x400000; " +
            # /chosen already exists in board.dts (stdout-path); add to it.
-           "fdtput -t x $@ /chosen linux,initrd-start " +
+           "$(execpath @dtc//:fdtput) -t x $@ /chosen linux,initrd-start " +
            "$$(printf '0x%x 0x%x' $$((start >> 32)) $$((start & 0xffffffff))); " +
-           "fdtput -t x $@ /chosen linux,initrd-end " +
+           "$(execpath @dtc//:fdtput) -t x $@ /chosen linux,initrd-end " +
            "$$(printf '0x%x 0x%x' $$((end >> 32)) $$((end & 0xffffffff)))"),
+    tools = ["@dtc//:fdtput"],
 )
 
 # opensbi_fw_zircon with the SIM memory map (board_zircon_sim_dtb) -- the

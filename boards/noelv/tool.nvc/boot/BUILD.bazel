@@ -37,17 +37,15 @@ vhdl_test(
         "lowmem_file": "$(rootpath //boards/noelv:opensbi_fw_hello_lowram_mem)",
         # 16 MiB (regbits 22, 0x0-0xFFFFFF): covers OpenSBI text (0x40000) + heap
         # (0x80000).  NVC folds this mem_t init array at elaboration, which OOMs
-        # the default heap -- raised via heap_size/unit_heap_size below.
+        # the default heap, so global_args below raises it.
         "lowmem_size": "4194304",
         "lowmem_regbits": "22",
         "disas": "1",
     },
-    # Raise NVC's global heaps so the 16 MiB behavioral memory can be folded at
-    # elaboration (needs rules_nvc feat-elaborate-heap: the -H/-M passthrough).
-    heap_size = "4g",
-    unit_heap_size = "4g",
-    # The run (nvc -r) also allocates the memory at init, so it needs the heap
-    # too; the wrapper hoists -H*/-M* from args to globals before -r.
-    args = ["-H4g", "-M4g", "--ieee-warnings=off"],
+    # Raise NVC's global and unit heaps so the 16 MiB behavioral memory can be
+    # folded at elaboration. global_args (rules_nvc 4.6.0) puts the options
+    # before the command, for the elaboration and the run alike.
+    global_args = ["-H", "4g", "-M", "4g"],
+    args = ["--ieee-warnings=off"],
     tags = ["manual"],
 )

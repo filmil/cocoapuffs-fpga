@@ -12,6 +12,8 @@ build --@rules_vunit//:vhdl_standard=2008
 # Pin grlib to 2008 so its STD.STANDARD matches.
 build --@grlib//:vhdl_standard=2008
 build --@rules_vivado//internal:vivado_version=2025.2
+# Vivado from the Bazel-installed toolchain, not Docker.
+build --@rules_vivado//:vivado_mode=hermetic
 
 # This is silly.
 build --action_env=PKG_CONFIG_PATH=/nix/store/2cdblwdscbgpmjgghgqs5wcwg2cm4mjc-bzip2-1.0.8-dev/lib/pkgconfig

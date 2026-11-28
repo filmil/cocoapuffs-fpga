@@ -61,9 +61,7 @@ vhdl_test(
         "@rules_vunit//tool.nvc:vunit_lib",
     ],
     standard = "2008",
-    # Large behavioral memory folds at elaboration + allocates at run; raise the
-    # NVC heaps (needs rules_nvc feat-elaborate-heap; run gets it via args).
-    heap_size = "4g",
-    unit_heap_size = "4g",
-    args = ["-H4g", "-M4g"],
+    # A large behavioral memory folds at elaboration and is allocated at run,
+    # so raise NVC's global and unit heaps for both (rules_nvc 4.6.0).
+    global_args = ["-H", "4g", "-M", "4g"],
 )
