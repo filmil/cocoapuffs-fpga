@@ -254,15 +254,10 @@ use_repo(fusesoc_cores, "fusesoc_cores")
 
 bazel_dep(name = "grlib", version = "0.2.0")
 
-# Vivado, hermetic: rules_vivado installs it from AMD's installer archive into
-# an install cache, which every workspace on the machine then reuses. AMD's
-# license does not allow redistributing the installer, so download the
-# "AMD Unified Installer for FPGAs & Adaptive SoCs 2025.2: SFD" archive from
-# AMD yourself, and set both paths below for your machine. The Vivado targets
-# need this; the firmware and the open-source simulations do not.
-vivado = use_extension("@rules_vivado//:extensions.bzl", "vivado")
-vivado.install(
-    install_cache = "/path/to/vivado-install-cache",
-    urls = ["file:///path/to/FPGAs_AdaptiveSoCs_Unified_SDI_2025.2_1114_2157_1.tar"],
-    modules = ["Artix-7"],
-)
+# Vivado: the Vivado targets need it; the firmware and the open-source
+# simulations do not. By default rules_vivado installs Vivado itself from
+# AMD's installer archive, which you download from AMD and name in a
+# `vivado.install(...)` tag here (with modules = ["Artix-7"]); see
+# https://github.com/filmil/bazel_rules_vivado/blob/main/docs/hermetic-quickstart.md
+# To use a Vivado you have installed already, put
+# `build --@rules_vivado//:vivado_mode=host` in a user.bazelrc instead.

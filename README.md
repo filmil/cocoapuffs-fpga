@@ -40,7 +40,8 @@ NOEL-V.
 - **Bazel** — via [bazelisk][bazelisk]; the pinned version is in `.bazelversion`.
 - **Xilinx Vivado** — for synthesis, place-and-route, and programming. Bazel
   installs Vivado 2025.2 itself from AMD's installer archive, which you download
-  from AMD and name in `MODULE.bazel` (`vivado.install`). A Vivado
+  from AMD and name in `MODULE.bazel`, or uses an installed Vivado in host mode
+  (see the comment in `MODULE.bazel`). A Vivado
   `hw_server` must be reachable for programming (default `localhost:3122`; it may
   be tunnelled from a remote host).
 - The RISC-V GCC toolchain, GHDL/NVC (VHDL simulation), and a C++/Go toolchain
